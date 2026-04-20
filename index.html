@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestor Financiero - Multi Escuela</title>
+    
+    <!-- Conexión al archivo Manifest físico -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/G_icon.svg/512px-G_icon.svg.png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <!-- Librería para convertir HTML a Imagen -->
@@ -886,60 +892,33 @@ service cloud.firestore {
         import { getFirestore, collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // ==========================================
-        // 1. GENERACIÓN DINÁMICA DE PWA (Manifest & SW)
+        // 1. CONEXIÓN DEL SERVICE WORKER (PWA FÍSICO)
         // ==========================================
-        (function setupPWA() {
-            const manifest = {
-                name: "Gestor Financiero Escolar",
-                short_name: "GestorEscolar",
-                start_url: ".",
-                display: "standalone",
-                background_color: "#f8fafc",
-                theme_color: "#2563eb",
-                icons: [{
-                    src: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzI1NjNlYiIvPjx0ZXh0IHg9IjUwIiB5PSI1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjUwIiBmaWxsPSJ3aGl0ZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+RzwvdGV4dD48L3N2Zz4=",
-                    sizes: "192x192",
-                    type: "image/svg+xml"
-                }]
-            };
-            const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/manifest+json'});
-            const manifestUrl = URL.createObjectURL(manifestBlob);
-            const link = document.createElement('link');
-            link.rel = 'manifest';
-            link.href = manifestUrl;
-            document.head.appendChild(link);
-
-            const swCode = `
-                self.addEventListener('install', (e) => { self.skipWaiting(); });
-                self.addEventListener('activate', (e) => { e.waitUntil(clients.claim()); });
-                self.addEventListener('fetch', (e) => { 
-                    e.respondWith(fetch(e.request).catch(() => new Response('Offline - No hay conexión'))); 
-                });
-            `;
-            const swBlob = new Blob([swCode], {type: 'application/javascript'});
-            const swUrl = URL.createObjectURL(swBlob);
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register(swUrl).catch(err => console.log('SW no registrado', err));
-            }
-
-            let deferredPrompt;
-            window.addEventListener('beforeinstallprompt', (e) => {
-                e.preventDefault();
-                deferredPrompt = e;
-                document.getElementById('btn-install-pwa').classList.remove('hidden');
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Service Worker registrado correctamente', reg))
+                    .catch(err => console.log('Error al registrar SW', err));
             });
+        }
 
-            document.getElementById('btn-install-pwa').addEventListener('click', async () => {
-                if (deferredPrompt) {
-                    deferredPrompt.prompt();
-                    const { outcome } = await deferredPrompt.userChoice;
-                    if (outcome === 'accepted') {
-                        document.getElementById('btn-install-pwa').classList.add('hidden');
-                    }
-                    deferredPrompt = null;
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('btn-install-pwa').classList.remove('hidden');
+        });
+
+        document.getElementById('btn-install-pwa').addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    document.getElementById('btn-install-pwa').classList.add('hidden');
                 }
-            });
-        })();
+                deferredPrompt = null;
+            }
+        });
 
         // ==========================================
         // CONFIG FIREBASE
@@ -1369,12 +1348,13 @@ service cloud.firestore {
                         
                         if(!ident) { errorCount++; continue; }
 
+                        // Autocompletar inteligente si ya existe en Firebase
                         const qExisting = query(collection(db, "students"), where("identification", "==", ident));
                         const existingDocs = await getDocs(qExisting);
                         
                         let existingInCurrentSchool = null;
                         if (!existingDocs.empty) {
-                            if (!name) name = existingDocs.docs[0].data().name;
+                            if (!name) name = existingDocs.docs[0].data().name; // Hereda el nombre si viene vacío en excel
                             existingInCurrentSchool = existingDocs.docs.find(d => d.data().schoolId === currentSchoolId);
                         }
 
