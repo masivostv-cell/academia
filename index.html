@@ -11,6 +11,8 @@
     <!-- Librerías para Gráficas y PDF -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Librería para procesar Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn {
@@ -39,6 +41,12 @@
 
     <!-- Notificaciones -->
     <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <!-- Botón Instalar PWA (Aparece en Móviles) -->
+    <button id="btn-install-pwa" class="hidden fixed bottom-6 right-6 bg-blue-600 text-white rounded-full p-4 shadow-2xl z-50 flex items-center gap-2 hover:scale-105 transition-transform hover:bg-blue-700">
+        <i class="fa-solid fa-download text-xl"></i>
+        <span class="font-bold pr-2">Instalar App</span>
+    </button>
 
     <!-- Candado: Acceso Admin (Visible solo en Login Alumno) -->
     <button id="btn-lock-admin" onclick="showScreen('screen-auth-admin')" class="absolute top-4 right-6 text-slate-400 hover:text-slate-700 z-40 transition-colors" title="Acceso Administrativo">
@@ -79,28 +87,43 @@ service cloud.firestore {
         </div>
     </div>
 
-    <!-- PANTALLA: LOGIN ALUMNO (Landing Page Default) -->
+    <!-- PANTALLA: LOGIN ALUMNO (SOLO ID + CONTRASEÑA) -->
     <div id="screen-auth-student" class="hidden min-h-screen flex items-center justify-center p-4 fade-in">
         <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-lg w-full max-w-md text-center border-t-4 border-blue-600">
             <div class="bg-blue-100 text-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <i class="fa-solid fa-user-graduate text-3xl"></i>
+                <i class="fa-solid fa-id-card text-3xl"></i>
             </div>
             <h2 class="text-2xl font-bold text-slate-800 mb-1">Portal de Alumnos</h2>
-            <p class="text-slate-500 text-sm mb-6" id="student-auth-subtitle">Ingresa para ver tu estado de cuenta.</p>
+            <p class="text-slate-500 text-sm mb-6" id="student-auth-subtitle">Ingresa con tu ID y contraseña.</p>
 
             <form id="form-auth-student" onsubmit="handleStudentAuth(event)" class="text-left space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Correo Electrónico</label>
-                    <input type="email" id="student-email" required class="w-full border border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="tu@correo.com">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Número de Identificación (ID)</label>
+                    <input type="text" id="student-ident" required class="w-full border border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none text-center font-bold text-lg tracking-wider" placeholder="Ej: 1005123456">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
-                    <input type="password" id="student-password" required minlength="6" class="w-full border border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="******">
+                    <input type="password" id="student-password" required minlength="6" class="w-full border border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none text-center font-bold text-lg tracking-wider" placeholder="******">
                 </div>
                 <button type="submit" id="btn-submit-student" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors shadow-sm flex justify-center items-center gap-2">
                     Ingresar
                 </button>
             </form>
+        </div>
+    </div>
+
+    <!-- PANTALLA: SELECCIÓN DE ESCUELA (MULTI-ESCUELA ALUMNO Y ADMIN) -->
+    <div id="screen-select-school" class="hidden min-h-screen flex flex-col items-center justify-center p-4 fade-in bg-slate-50">
+        <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-lg w-full max-w-md text-center border-t-4 border-blue-600">
+            <div class="bg-blue-100 text-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fa-solid fa-school text-3xl"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">Selecciona tu Escuela</h2>
+            <p class="text-slate-500 text-sm mb-6">Tu cuenta está vinculada a varias escuelas. ¿A cuál deseas ingresar?</p>
+            <div id="list-schools-selection" class="space-y-3 flex flex-col">
+                <!-- Botones inyectados por JS -->
+            </div>
+            <button onclick="logout()" class="mt-6 text-slate-400 hover:text-slate-600 text-sm underline">Cancelar y Salir</button>
         </div>
     </div>
 
@@ -119,12 +142,12 @@ service cloud.firestore {
 
             <form id="form-auth-admin" onsubmit="handleAdminAuth(event)" class="text-left space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Correo Electrónico</label>
-                    <input type="email" id="admin-email" required class="w-full border border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-green-500 outline-none" placeholder="admin@escuela.com">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">ID o Correo Electrónico</label>
+                    <input type="text" id="admin-ident" required class="w-full border border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-green-500 outline-none font-medium" placeholder="Ej: 1005123456 o superadmin@...">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
-                    <input type="password" id="admin-password" required minlength="6" class="w-full border border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-green-500 outline-none" placeholder="******">
+                    <input type="password" id="admin-password" required minlength="6" class="w-full border border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-green-500 outline-none font-medium" placeholder="******">
                 </div>
                 <button type="submit" id="btn-submit-admin" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors shadow-sm flex justify-center items-center gap-2">
                     Ingresar
@@ -164,11 +187,11 @@ service cloud.firestore {
                     <form id="form-create-admin" onsubmit="handleCreateAdmin(event)" class="space-y-4">
                         <select id="new-admin-school" required class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-slate-800 outline-none">
                             <option value="">-- Selecciona una escuela --</option>
-                            <!-- Opciones inyectadas por JS -->
                         </select>
-                        <input type="email" id="new-admin-email" required class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-slate-800 outline-none" placeholder="Correo del Administrador">
+                        <input type="text" id="new-admin-ident" required onblur="window.searchAdminInfo()" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-slate-800 outline-none" placeholder="ID del Administrador">
+                        <input type="text" id="new-admin-name" required class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-slate-800 outline-none" placeholder="Nombre Completo">
                         <input type="password" id="new-admin-password" required minlength="6" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-slate-800 outline-none" placeholder="Contraseña Temporal">
-                        <button type="submit" id="btn-create-admin" class="w-full bg-slate-900 hover:bg-slate-800 text-white py-2 rounded-lg font-medium flex justify-center items-center gap-2">Registrar Administrador</button>
+                        <button type="submit" id="btn-create-admin" class="w-full bg-slate-900 hover:bg-slate-800 text-white py-2 rounded-lg font-medium flex justify-center items-center gap-2">Registrar / Vincular Admin</button>
                     </form>
                 </div>
             </div>
@@ -226,6 +249,9 @@ service cloud.firestore {
                 <button onclick="window.openModal('modal-add-student')" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2">
                     <i class="fa-solid fa-user-plus"></i> Añadir Alumno
                 </button>
+                <button onclick="window.openModal('modal-bulk-upload')" class="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-file-excel"></i> Carga Masiva
+                </button>
                 <button onclick="window.openModal('modal-add-income')" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2">
                     <i class="fa-solid fa-hand-holding-dollar"></i> Ingreso General
                 </button>
@@ -251,7 +277,7 @@ service cloud.firestore {
                             <thead>
                                 <tr class="bg-slate-100 text-slate-600 text-sm whitespace-nowrap">
                                     <th class="p-3">Alumno</th>
-                                    <th class="p-3">Correo</th>
+                                    <th class="p-3">Modalidad</th>
                                     <th class="p-3">Total / Deuda</th>
                                     <th class="p-3 text-center">Acciones</th>
                                 </tr>
@@ -368,32 +394,40 @@ service cloud.firestore {
         </div>
     </div>
 
-    <!-- MODAL: AGREGAR PAGO -->
-    <div id="modal-payment" class="hidden fixed inset-0 bg-slate-900 bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <!-- MODAL: CARGA MASIVA DE ALUMNOS (EXCEL) -->
+    <div id="modal-bulk-upload" class="hidden fixed inset-0 bg-slate-900 bg-opacity-50 z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden fade-in">
-            <div class="bg-green-600 p-4 text-white flex justify-between items-center">
-                <h3 class="font-bold text-lg">Registrar Abono</h3>
-                <button onclick="window.closeModal('modal-payment')" class="text-green-100 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <div class="bg-purple-600 p-4 text-white flex justify-between items-center">
+                <h3 class="font-bold text-lg"><i class="fa-solid fa-file-excel mr-2"></i> Carga Masiva de Alumnos</h3>
+                <button onclick="window.closeModal('modal-bulk-upload')" class="text-purple-100 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
             <div class="p-6">
-                <p class="text-sm text-slate-500 mb-4">Alumno: <strong id="modal-std-name" class="text-slate-800"></strong></p>
-                <form id="form-add-payment" onsubmit="window.handleProcessPayment(event)" class="space-y-4">
-                    <input type="hidden" id="modal-std-id">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Monto del Abono ($)</label>
-                        <input type="number" id="payment-amount" required min="1" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none">
+                <div class="mb-6 bg-purple-50 border border-purple-200 rounded-lg p-4 text-sm text-purple-800">
+                    <p class="mb-2 font-bold"><i class="fa-solid fa-circle-info"></i> Pasos a seguir:</p>
+                    <ol class="list-decimal pl-4 space-y-1 mb-4">
+                        <li>Descarga la plantilla de Excel a continuación.</li>
+                        <li>Llena los datos sin alterar ni borrar los títulos de las columnas.</li>
+                        <li>Sube tu archivo modificado en esta ventana.</li>
+                    </ol>
+                    <button type="button" onclick="window.downloadExcelTemplate()" class="w-full bg-white border border-purple-300 hover:bg-purple-100 text-purple-700 font-bold py-2 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-download"></i> Descargar Plantilla Excel
+                    </button>
+                </div>
+
+                <form id="form-bulk-upload" onsubmit="window.handleBulkUpload(event)">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Subir archivo completado (.xlsx)</label>
+                        <input type="file" id="bulk-excel-file" accept=".xlsx, .xls, .csv" required class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer">
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Fecha</label>
-                        <input type="date" id="payment-date" required class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none">
+                    
+                    <!-- Información de Progreso -->
+                    <div id="bulk-upload-progress" class="hidden mb-4 bg-slate-100 p-3 rounded-lg text-sm text-slate-600 text-center font-medium shadow-inner">
+                        Procesando alumno: <span id="bulk-current" class="text-purple-600 font-bold text-lg">0</span> de <span id="bulk-total" class="font-bold">0</span>...
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Concepto / Nota</label>
-                        <input type="text" id="payment-note" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none" placeholder="Ej: Mensualidad">
-                    </div>
-                    <div class="pt-4 flex gap-3">
-                        <button type="button" onclick="window.closeModal('modal-payment')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 rounded-lg">Cancelar</button>
-                        <button type="submit" id="btn-save-payment" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg flex justify-center items-center gap-2">Guardar Pago</button>
+
+                    <div class="pt-2 flex gap-3">
+                        <button type="button" onclick="window.closeModal('modal-bulk-upload')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 rounded-lg">Cancelar</button>
+                        <button type="submit" id="btn-process-bulk" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 rounded-lg flex justify-center items-center gap-2">Procesar Archivo</button>
                     </div>
                 </form>
             </div>
@@ -411,27 +445,110 @@ service cloud.firestore {
                 <form id="form-add-student" onsubmit="window.handleAddStudent(event)" class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Identificación (ID)</label>
-                        <input type="text" id="new-std-ident" required class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none" placeholder="Ej: 1005123456">
+                        <input type="text" id="new-std-ident" required onblur="window.searchStudentInfo()" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none" placeholder="Ej: 1005123456">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Nombre Completo</label>
                         <input type="text" id="new-std-name" required class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Correo Electrónico</label>
-                        <input type="email" id="new-std-email" required class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none" placeholder="correo@alumno.com">
-                    </div>
-                    <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Contraseña Temporal</label>
                         <input type="password" id="new-std-password" required minlength="6" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none" placeholder="******">
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Valor Total del Curso ($)</label>
-                        <input type="number" id="new-std-total" required min="1" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none" placeholder="Ej: 150000">
+                    
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <label class="block text-sm font-bold text-slate-800 mb-2">Modalidad de Cobro</label>
+                        <select id="new-std-payment-mode" onchange="window.togglePaymentMode('new')" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none mb-3">
+                            <option value="total">Valor Total Fijo (Único)</option>
+                            <option value="monthly">Mensualidad Recurrente</option>
+                        </select>
+
+                        <div id="new-std-total-container" class="space-y-2">
+                            <label class="block text-sm font-medium text-slate-700">Valor Total del Curso ($)</label>
+                            <input type="number" id="new-std-total" min="0" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none" placeholder="Ej: 150000">
+                        </div>
+
+                        <div id="new-std-monthly-container" class="hidden space-y-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Valor de la Mensualidad ($)</label>
+                                <input type="number" id="new-std-monthly-fee" min="0" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none" placeholder="Ej: 30000">
+                            </div>
+                            <div class="flex gap-2">
+                                <div class="flex-1">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Día de Cobro (1-31)</label>
+                                    <input type="number" id="new-std-billing-day" min="1" max="31" value="1" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none">
+                                </div>
+                                <div class="flex-1">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Fecha Inicial</label>
+                                    <input type="date" id="new-std-start-date" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none">
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-500">El sistema sumará automáticamente el valor de la mensualidad cada vez que pase el día de cobro estipulado.</p>
+                        </div>
                     </div>
+
                     <div class="pt-4 flex gap-3">
                         <button type="button" onclick="window.closeModal('modal-add-student')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 rounded-lg">Cancelar</button>
                         <button type="submit" id="btn-add-student" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg flex justify-center items-center gap-2">Registrar Alumno</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: EDITAR ALUMNO -->
+    <div id="modal-edit-student" class="hidden fixed inset-0 bg-slate-900 bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden fade-in">
+            <div class="bg-blue-600 p-4 text-white flex justify-between items-center">
+                <h3 class="font-bold text-lg"><i class="fa-solid fa-pen mr-2"></i> Editar Alumno</h3>
+                <button onclick="window.closeModal('modal-edit-student')" class="text-blue-100 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 max-h-[80vh] overflow-y-auto">
+                <form id="form-edit-student" onsubmit="window.handleEditStudent(event)" class="space-y-4">
+                    <input type="hidden" id="edit-std-id">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Identificación (ID)</label>
+                        <input type="text" id="edit-std-ident" required class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Nombre Completo</label>
+                        <input type="text" id="edit-std-name" required class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <label class="block text-sm font-bold text-slate-800 mb-2">Modalidad de Cobro</label>
+                        <select id="edit-std-payment-mode" onchange="window.togglePaymentMode('edit')" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none mb-3">
+                            <option value="total">Valor Total Fijo (Único)</option>
+                            <option value="monthly">Mensualidad Recurrente</option>
+                        </select>
+
+                        <div id="edit-std-total-container" class="space-y-2">
+                            <label class="block text-sm font-medium text-slate-700">Valor Total del Curso ($)</label>
+                            <input type="number" id="edit-std-total" min="0" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+
+                        <div id="edit-std-monthly-container" class="hidden space-y-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Valor de la Mensualidad ($)</label>
+                                <input type="number" id="edit-std-monthly-fee" min="0" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div class="flex gap-2">
+                                <div class="flex-1">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Día de Cobro</label>
+                                    <input type="number" id="edit-std-billing-day" min="1" max="31" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                                </div>
+                                <div class="flex-1">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Fecha Inicial</label>
+                                    <input type="date" id="edit-std-start-date" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="text-xs text-slate-500 mt-2"><i class="fa-solid fa-circle-info"></i> Nota: El ID de acceso no se puede modificar por seguridad.</p>
+                    <div class="pt-4 flex gap-3">
+                        <button type="button" onclick="window.closeModal('modal-edit-student')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 rounded-lg">Cancelar</button>
+                        <button type="submit" id="btn-edit-student" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg flex justify-center items-center gap-2">Actualizar Datos</button>
                     </div>
                 </form>
             </div>
@@ -499,39 +616,39 @@ service cloud.firestore {
         </div>
     </div>
 
-    <!-- MODAL: EDITAR ALUMNO -->
-    <div id="modal-edit-student" class="hidden fixed inset-0 bg-slate-900 bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <!-- MODAL: AGREGAR PAGO (ABONO) -->
+    <div id="modal-payment" class="hidden fixed inset-0 bg-slate-900 bg-opacity-50 z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden fade-in">
-            <div class="bg-blue-600 p-4 text-white flex justify-between items-center">
-                <h3 class="font-bold text-lg"><i class="fa-solid fa-pen mr-2"></i> Editar Alumno</h3>
-                <button onclick="window.closeModal('modal-edit-student')" class="text-blue-100 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <div class="bg-green-600 p-4 text-white flex justify-between items-center">
+                <h3 class="font-bold text-lg">Registrar Abono</h3>
+                <button onclick="window.closeModal('modal-payment')" class="text-green-100 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
-            <div class="p-6 max-h-[80vh] overflow-y-auto">
-                <form id="form-edit-student" onsubmit="window.handleEditStudent(event)" class="space-y-4">
-                    <input type="hidden" id="edit-std-id">
+            <div class="p-6">
+                <p class="text-sm text-slate-500 mb-4">Alumno: <strong id="modal-std-name" class="text-slate-800"></strong></p>
+                <form id="form-add-payment" onsubmit="window.handleProcessPayment(event)" class="space-y-4">
+                    <input type="hidden" id="modal-std-id">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Identificación (ID)</label>
-                        <input type="text" id="edit-std-ident" required class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Monto del Abono ($)</label>
+                        <input type="number" id="payment-amount" required min="1" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Nombre Completo</label>
-                        <input type="text" id="edit-std-name" required class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Fecha</label>
+                        <input type="date" id="payment-date" required class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Valor Total del Curso ($)</label>
-                        <input type="number" id="edit-std-total" required min="1" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Concepto / Nota</label>
+                        <input type="text" id="payment-note" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none" placeholder="Ej: Mensualidad">
                     </div>
-                    <p class="text-xs text-slate-500 mt-2"><i class="fa-solid fa-circle-info"></i> Nota: El correo y contraseña de acceso no se pueden modificar por seguridad.</p>
                     <div class="pt-4 flex gap-3">
-                        <button type="button" onclick="window.closeModal('modal-edit-student')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 rounded-lg">Cancelar</button>
-                        <button type="submit" id="btn-edit-student" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg flex justify-center items-center gap-2">Actualizar Datos</button>
+                        <button type="button" onclick="window.closeModal('modal-payment')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 rounded-lg">Cancelar</button>
+                        <button type="submit" id="btn-save-payment" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg flex justify-center items-center gap-2">Guardar Pago</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 
-    <!-- MODAL: CONFIRMACIÓN DE ELIMINACIÓN -->
+    <!-- MODAL: CONFIRMACIÓN DE ELIMINACIÓN DE ALUMNO -->
     <div id="modal-confirm-delete" class="hidden fixed inset-0 bg-slate-900 bg-opacity-50 z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden fade-in text-center p-6">
             <div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -648,7 +765,7 @@ service cloud.firestore {
         </div>
     </div>
 
-    <!-- NUEVO: MODAL DE RECIBO Y COMPARTIR WHATSAPP -->
+    <!-- MODAL DE RECIBO Y COMPARTIR WHATSAPP -->
     <div id="modal-receipt" class="hidden fixed inset-0 bg-slate-900 bg-opacity-75 z-[60] flex items-center justify-center p-4">
         <div class="bg-slate-100 rounded-xl shadow-xl w-full max-w-md overflow-hidden fade-in flex flex-col">
             <div class="bg-slate-800 p-4 text-white flex justify-between items-center">
@@ -715,12 +832,15 @@ service cloud.firestore {
         <main class="max-w-4xl mx-auto p-4 mt-6">
             <div class="mb-8">
                 <h2 class="text-2xl font-bold text-slate-800">Hola, <span id="dash-std-name" class="text-blue-600"></span></h2>
-                <p class="text-slate-500 text-sm">Escuela: <span id="dash-std-school" class="font-medium"></span></p>
+                <p class="text-slate-500 text-sm">Escuela: <span id="dash-std-school" class="font-medium text-slate-700"></span></p>
+                <div id="dash-std-payment-info" class="mt-2 inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-bold">
+                    <!-- Mensaje de cobro -->
+                </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                 <div class="bg-white p-6 rounded-xl shadow-sm border border-l-4 border-l-slate-400">
-                    <p class="text-sm text-slate-500 font-medium mb-1">Valor Total del Curso</p>
+                    <p class="text-sm text-slate-500 font-medium mb-1" id="dash-std-total-label">Total Generado</p>
                     <p id="dash-std-total" class="text-2xl font-bold text-slate-800">$0</p>
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-sm border border-l-4 border-l-green-500">
@@ -733,17 +853,7 @@ service cloud.firestore {
                 </div>
             </div>
 
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
-                <div class="flex justify-between text-sm mb-2 font-medium">
-                    <span class="text-slate-600">Progreso de pago</span>
-                    <span id="dash-std-progress-text" class="text-blue-600">0%</span>
-                </div>
-                <div class="w-full bg-slate-200 rounded-full h-3">
-                    <div id="dash-std-progress-bar" class="bg-blue-600 h-3 rounded-full transition-all duration-1000" style="width: 0%"></div>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto mb-8">
                 <div class="p-4 bg-slate-50 border-b border-slate-200 min-w-[300px]">
                     <h3 class="font-bold text-slate-800"><i class="fa-solid fa-clock-rotate-left text-blue-600"></i> Historial de Abonos</h3>
                 </div>
@@ -756,7 +866,7 @@ service cloud.firestore {
             </div>
 
             <!-- Comunicados Alumno -->
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 mt-8 overflow-hidden">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="p-4 bg-blue-50 border-b border-blue-100">
                     <h3 class="font-bold text-blue-900"><i class="fa-solid fa-file-lines mr-2 text-blue-600"></i> Comunicados y Autorizaciones</h3>
                 </div>
@@ -769,13 +879,71 @@ service cloud.firestore {
         </main>
     </div>
 
-    <!-- LÓGICA CON FIREBASE MODULAR v11 -->
+    <!-- SCRIPT PRINCIPAL -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Configuración de Firebase proporcionada
+        // ==========================================
+        // 1. GENERACIÓN DINÁMICA DE PWA (Manifest & SW)
+        // ==========================================
+        (function setupPWA() {
+            const manifest = {
+                name: "Gestor Financiero Escolar",
+                short_name: "GestorEscolar",
+                start_url: ".",
+                display: "standalone",
+                background_color: "#f8fafc",
+                theme_color: "#2563eb",
+                icons: [{
+                    src: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzI1NjNlYiIvPjx0ZXh0IHg9IjUwIiB5PSI1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjUwIiBmaWxsPSJ3aGl0ZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+RzwvdGV4dD48L3N2Zz4=",
+                    sizes: "192x192",
+                    type: "image/svg+xml"
+                }]
+            };
+            const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/manifest+json'});
+            const manifestUrl = URL.createObjectURL(manifestBlob);
+            const link = document.createElement('link');
+            link.rel = 'manifest';
+            link.href = manifestUrl;
+            document.head.appendChild(link);
+
+            const swCode = `
+                self.addEventListener('install', (e) => { self.skipWaiting(); });
+                self.addEventListener('activate', (e) => { e.waitUntil(clients.claim()); });
+                self.addEventListener('fetch', (e) => { 
+                    e.respondWith(fetch(e.request).catch(() => new Response('Offline - No hay conexión'))); 
+                });
+            `;
+            const swBlob = new Blob([swCode], {type: 'application/javascript'});
+            const swUrl = URL.createObjectURL(swBlob);
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register(swUrl).catch(err => console.log('SW no registrado', err));
+            }
+
+            let deferredPrompt;
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                document.getElementById('btn-install-pwa').classList.remove('hidden');
+            });
+
+            document.getElementById('btn-install-pwa').addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    if (outcome === 'accepted') {
+                        document.getElementById('btn-install-pwa').classList.add('hidden');
+                    }
+                    deferredPrompt = null;
+                }
+            });
+        })();
+
+        // ==========================================
+        // CONFIG FIREBASE
+        // ==========================================
         const firebaseConfig = {
             apiKey: "AIzaSyCx2CO_0wncvPDn1QXVMQ4usGF19njyzEU",
             authDomain: "escuelas-3c3bd.firebaseapp.com",
@@ -790,17 +958,16 @@ service cloud.firestore {
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Inicializamos una segunda app de Firebase para poder registrar usuarios sin cerrar la sesión del SuperAdmin
+        // App secundaria para registrar alumnos y subidas masivas sin desloguear al admin
         const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
         const secondaryAuth = getAuth(secondaryApp);
 
-        // Constantes
         const SUPERADMIN_EMAIL = "jorgemanuelp92@hotmail.com";
         let currentUserRole = null;
         let currentSchoolId = null;
         let currentStudentId = null;
+        let activeListeners = [];
 
-        // --- Utilidades Globales ---
         window.formatCurrency = (amount) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(amount);
         window.formatDate = (dateString) => new Date(dateString + 'T00:00:00').toLocaleDateString('es-CO', { year: 'numeric', month: 'short', day: 'numeric' });
         
@@ -808,9 +975,8 @@ service cloud.firestore {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             const bgColor = type === 'success' ? 'bg-green-600' : (type === 'error' ? 'bg-red-600' : 'bg-blue-600');
-            const icon = type === 'success' ? 'fa-check-circle' : (type === 'error' ? 'fa-circle-exclamation' : 'fa-info-circle');
             toast.className = `${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 toast-enter max-w-sm`;
-            toast.innerHTML = `<i class="fa-solid ${icon}"></i><span class="font-medium text-sm">${message}</span>`;
+            toast.innerHTML = `<i class="fa-solid fa-info-circle"></i><span class="font-medium text-sm">${message}</span>`;
             container.appendChild(toast);
             setTimeout(() => {
                 toast.classList.replace('toast-enter', 'toast-exit');
@@ -819,12 +985,15 @@ service cloud.firestore {
         };
 
         window.showScreen = (screenId) => {
-            ['screen-loading', 'screen-auth-student', 'screen-auth-admin', 'screen-superadmin', 'screen-admin', 'screen-student', 'screen-setup-error'].forEach(id => {
+            ['screen-loading', 'screen-auth-student', 'screen-auth-admin', 'screen-superadmin', 'screen-admin', 'screen-student', 'screen-select-school', 'screen-setup-error'].forEach(id => {
                 document.getElementById(id).classList.add('hidden');
             });
             document.getElementById(screenId).classList.remove('hidden');
             document.getElementById('btn-lock-admin').style.display = screenId === 'screen-auth-student' ? 'block' : 'none';
         };
+
+        window.clearListeners = () => { activeListeners.forEach(unsub => unsub()); activeListeners = []; };
+        window.logout = () => { window.clearListeners(); signOut(auth); };
 
         const setLoading = (btnId, isLoading, text = 'Procesando...') => {
             const btn = document.getElementById(btnId);
@@ -832,7 +1001,7 @@ service cloud.firestore {
                 if(isLoading) {
                     btn.disabled = true;
                     btn.dataset.original = btn.innerHTML;
-                    btn.innerHTML = `<div class="loader" style="width:16px;height:16px;border-top-color:white;border-width:2px;"></div> ${text}`;
+                    btn.innerHTML = `<div class="loader" style="width:16px;height:16px;border-top-color:white;border-width:2px;"></div> ${text !== 'Procesando...' ? text : ''}`;
                 } else {
                     btn.disabled = false;
                     btn.innerHTML = btn.dataset.original || text;
@@ -840,117 +1009,206 @@ service cloud.firestore {
             }
         };
 
-        // Control de listeners activos para evitar errores de permisos al cerrar sesión
-        let activeListeners = [];
-
-        window.clearListeners = () => {
-            activeListeners.forEach(unsub => unsub());
-            activeListeners = [];
+        // --- CÁLCULO DE DEUDA Y MENSUALIDADES ---
+        window.calculateOwed = (student) => {
+            if (student.paymentMode === 'monthly') {
+                if (!student.startDate || !student.monthlyFee) return 0;
+                const start = new Date(student.startDate);
+                const now = new Date();
+                
+                let monthsPassed = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+                
+                if (now.getDate() >= (student.billingDay || 1)) {
+                    monthsPassed += 1;
+                }
+                
+                if (monthsPassed < 0) monthsPassed = 0;
+                return monthsPassed * parseFloat(student.monthlyFee);
+            }
+            return parseFloat(student.totalFee) || 0;
         };
 
-        window.logout = () => {
-            window.clearListeners();
-            signOut(auth);
-        };
-
-        // Observador de Estado de Sesión
+        // --- MANEJO DE AUTENTICACIÓN ---
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 try {
                     const userDoc = await getDoc(doc(db, "users", user.uid));
                     if (userDoc.exists()) {
                         const data = userDoc.data();
-                        currentUserRole = data.role;
-                        currentSchoolId = data.schoolId;
                         
                         if (data.role === 'superadmin') {
                             showScreen('screen-superadmin');
                             loadSuperAdminData();
-                        } else if (data.role === 'admin') {
-                            showScreen('screen-admin');
+                        } 
+                        else if (data.role === 'admin') {
+                            // Lógica Multi-Escuela para Administradores
+                            let adminSchools = data.schoolIds || [];
+                            // Soporte para administradores antiguos que solo tengan "schoolId"
+                            if (data.schoolId && !adminSchools.includes(data.schoolId)) {
+                                adminSchools.push(data.schoolId);
+                            }
+
+                            if (adminSchools.length === 0) {
+                                showToast("No tienes escuelas asignadas.", "error");
+                                signOut(auth);
+                            } else if (adminSchools.length === 1) {
+                                currentSchoolId = adminSchools[0];
+                                showScreen('screen-admin');
+                                getDoc(doc(db, "schools", currentSchoolId)).then(sd => {
+                                    if(sd.exists()) document.getElementById('admin-school-display-id').textContent = sd.data().name;
+                                });
+                                loadAdminData();
+                            } else {
+                                renderAdminSchoolSelection(adminSchools, user.email);
+                            }
+                        } 
+                        else if (data.role === 'student') {
+                            const ident = user.email.split('@')[0];
+                            const qIdent = query(collection(db, "students"), where("identification", "==", ident));
+                            const stdDocs = await getDocs(qIdent);
                             
-                            // Buscar y mostrar el nombre real de la escuela
-                            getDoc(doc(db, "schools", currentSchoolId)).then(schoolDoc => {
-                                if (schoolDoc.exists()) {
-                                    document.getElementById('admin-school-display-id').textContent = schoolDoc.data().name;
-                                } else {
-                                    document.getElementById('admin-school-display-id').textContent = `Escuela: ${currentSchoolId}`;
-                                }
-                            });
-                            
-                            loadAdminData();
-                        } else if (data.role === 'student') {
-                            currentStudentId = data.studentId;
-                            showScreen('screen-student');
-                            loadStudentData();
+                            if (stdDocs.empty) {
+                                showToast("No se encontraron registros de este alumno.", "error");
+                                signOut(auth);
+                            } else if (stdDocs.docs.length === 1) {
+                                const sData = stdDocs.docs[0].data();
+                                currentStudentId = stdDocs.docs[0].id;
+                                currentSchoolId = sData.schoolId;
+                                showScreen('screen-student');
+                                loadStudentData();
+                            } else {
+                                renderSchoolSelection(stdDocs.docs);
+                            }
                         }
+                    } else if (user.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase()) {
+                        await setDoc(doc(db, "users", user.uid), { role: 'superadmin', email: user.email });
+                        showScreen('screen-superadmin');
+                        loadSuperAdminData();
                     } else {
-                        // Si no existe pero es el email de superadmin, lo creamos
-                        if (user.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase()) {
-                            await setDoc(doc(db, "users", user.uid), { role: 'superadmin', email: user.email });
-                            showScreen('screen-superadmin');
-                            loadSuperAdminData();
-                        } else {
-                            showToast("Usuario sin rol asignado", "error");
-                            signOut(auth);
-                        }
+                        showToast("Usuario sin permisos", "error");
+                        signOut(auth);
                     }
                 } catch (error) {
-                    console.error("Error detallado de Firebase:", error);
-                    if (error.code === 'permission-denied') {
-                        showScreen('screen-setup-error');
-                    } else {
-                        showToast("Error de Base de Datos. ¿Ya creaste Firestore en la consola?", "error");
-                        showScreen('screen-auth-student');
-                    }
-                    signOut(auth);
+                    if (error.code === 'permission-denied') showScreen('screen-setup-error');
+                    else { showToast("Error de conexión", "error"); signOut(auth); }
                 }
             } else {
-                showScreen('screen-auth-student'); // Por defecto a login alumno
+                showScreen('screen-auth-student');
             }
         });
 
-        // --- AUTH: Lógica de Alumnos ---
-        window.handleStudentAuth = async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('student-email').value.trim().toLowerCase();
-            const password = document.getElementById('student-password').value;
+        // --- RENDERIZADO DE SELECCIÓN (ALUMNOS) ---
+        async function renderSchoolSelection(docsArray) {
+            const container = document.getElementById('list-schools-selection');
+            container.innerHTML = '';
+            
+            for (const d of docsArray) {
+                const sData = d.data();
+                const schoolDoc = await getDoc(doc(db, "schools", sData.schoolId));
+                const schoolName = schoolDoc.exists() ? schoolDoc.data().name : 'Escuela Desconocida';
 
-            setLoading('btn-submit-student', true);
-            try {
-                await signInWithEmailAndPassword(auth, email, password);
-            } catch (error) {
-                if (error.code === 'permission-denied') {
-                    showScreen('screen-setup-error');
-                } else {
-                    showToast("Credenciales incorrectas. Verifica tu correo y contraseña.", "error");
-                }
-            } finally {
-                setLoading('btn-submit-student', false);
+                container.innerHTML += `
+                    <button onclick="window.selectStudentSchool('${d.id}', '${sData.schoolId}')" class="w-full bg-slate-100 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 p-4 rounded-xl text-left transition-colors flex items-center justify-between">
+                        <div>
+                            <p class="font-bold text-slate-800">${schoolName}</p>
+                            <p class="text-xs text-slate-500">Alumno: ${sData.name}</p>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-blue-500"></i>
+                    </button>
+                `;
             }
+            showScreen('screen-select-school');
+        }
+
+        window.selectStudentSchool = (studentId, schoolId) => {
+            currentStudentId = studentId;
+            currentSchoolId = schoolId;
+            showScreen('screen-student');
+            loadStudentData();
         };
 
-        // --- AUTH: Lógica de Administradores ---
+        // --- RENDERIZADO DE SELECCIÓN (ADMINISTRADORES) ---
+        async function renderAdminSchoolSelection(schoolIds, adminEmail) {
+            const container = document.getElementById('list-schools-selection');
+            container.innerHTML = '';
+            
+            for (const schoolId of schoolIds) {
+                const schoolDoc = await getDoc(doc(db, "schools", schoolId));
+                const schoolName = schoolDoc.exists() ? schoolDoc.data().name : 'Escuela Desconocida';
+
+                container.innerHTML += `
+                    <button onclick="window.selectAdminSchool('${schoolId}')" class="w-full bg-slate-100 hover:bg-green-50 border border-slate-200 hover:border-green-300 p-4 rounded-xl text-left transition-colors flex items-center justify-between">
+                        <div>
+                            <p class="font-bold text-slate-800">${schoolName}</p>
+                            <p class="text-xs text-slate-500">Admin: ${adminEmail}</p>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-green-500"></i>
+                    </button>
+                `;
+            }
+            showScreen('screen-select-school');
+        }
+
+        window.selectAdminSchool = (schoolId) => {
+            currentSchoolId = schoolId;
+            showScreen('screen-admin');
+            getDoc(doc(db, "schools", currentSchoolId)).then(sd => {
+                if(sd.exists()) document.getElementById('admin-school-display-id').textContent = sd.data().name;
+            });
+            loadAdminData();
+        };
+
+        // --- MANEJADORES DE LOGINS ---
+        window.handleStudentAuth = async (e) => {
+            e.preventDefault();
+            setLoading('btn-submit-student', true);
+            const ident = document.getElementById('student-ident').value.trim();
+            const password = document.getElementById('student-password').value;
+            const internalEmail = `${ident}@estudiante.app`;
+            
+            try {
+                await signInWithEmailAndPassword(auth, internalEmail, password);
+            } catch (error) {
+                if (error.code === 'permission-denied') showScreen('screen-setup-error');
+                else showToast("Identificación o contraseña incorrectos.", "error");
+            } finally { setLoading('btn-submit-student', false); }
+        };
+
         window.handleAdminAuth = async (e) => {
             e.preventDefault();
-            const email = document.getElementById('admin-email').value.trim().toLowerCase();
-            const password = document.getElementById('admin-password').value;
-            
             setLoading('btn-submit-admin', true);
+            const inputVal = document.getElementById('admin-ident').value.trim();
+            const password = document.getElementById('admin-password').value;
+            // Permite usar correo (si es superadmin) o ID directo
+            const internalEmail = inputVal.includes('@') ? inputVal : `${inputVal}@admin.app`;
+
             try {
-                await signInWithEmailAndPassword(auth, email, password);
+                await signInWithEmailAndPassword(auth, internalEmail, password);
             } catch (error) {
-                if (error.code === 'permission-denied') {
-                    showScreen('screen-setup-error');
-                } else {
-                    showToast("Credenciales incorrectas.", "error");
-                }
-            } finally {
-                setLoading('btn-submit-admin', false);
-            }
+                if (error.code === 'permission-denied') showScreen('screen-setup-error');
+                else showToast("Identificación o contraseña incorrectos.", "error");
+            } finally { setLoading('btn-submit-admin', false); }
         };
 
         // --- LÓGICA SUPERADMIN ---
+        window.searchAdminInfo = async () => {
+            const ident = document.getElementById('new-admin-ident').value.trim();
+            if(!ident) return;
+            const q = query(collection(db, "users"), where("identification", "==", ident), where("role", "==", "admin"));
+            const snaps = await getDocs(q);
+            if(!snaps.empty) {
+                const data = snaps.docs[0].data();
+                document.getElementById('new-admin-name').value = data.name || '';
+                document.getElementById('new-admin-password').value = '********';
+                document.getElementById('new-admin-password').disabled = true;
+                showToast("Administrador encontrado. Se vinculará a la escuela.", "success");
+            } else {
+                document.getElementById('new-admin-name').value = '';
+                document.getElementById('new-admin-password').value = '';
+                document.getElementById('new-admin-password').disabled = false;
+            }
+        };
+
         window.handleCreateSchool = async (e) => {
             e.preventDefault();
             setLoading('btn-create-school', true);
@@ -960,218 +1218,437 @@ service cloud.firestore {
             const randomId = "ESC-" + Math.floor(1000 + Math.random() * 9000);
             
             try {
-                await setDoc(doc(db, "schools", randomId), {
-                    name: name,
-                    createdAt: serverTimestamp()
-                });
+                await setDoc(doc(db, "schools", randomId), { name: name, createdAt: serverTimestamp() });
                 showToast(`Escuela creada. ID: ${randomId}`);
                 document.getElementById('new-school-name').value = '';
                 loadSuperAdminData();
             } catch (error) {
                 if (error.code === 'permission-denied') showScreen('screen-setup-error');
                 else showToast("Error al crear escuela", "error");
-            } finally {
-                setLoading('btn-create-school', false);
-            }
+            } finally { setLoading('btn-create-school', false); }
         };
 
         window.handleCreateAdmin = async (e) => {
             e.preventDefault();
             setLoading('btn-create-admin', true);
             const schoolId = document.getElementById('new-admin-school').value;
-            const email = document.getElementById('new-admin-email').value.trim().toLowerCase();
+            const ident = document.getElementById('new-admin-ident').value.trim();
+            const name = document.getElementById('new-admin-name').value.trim();
             const password = document.getElementById('new-admin-password').value;
+            const internalEmail = `${ident}@admin.app`;
 
             try {
-                const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+                const qUser = query(collection(db, "users"), where("email", "==", internalEmail));
+                const userDocs = await getDocs(qUser);
                 
-                await setDoc(doc(db, "users", userCredential.user.uid), {
-                    role: 'admin',
-                    email: email,
-                    schoolId: schoolId
-                });
-
-                await signOut(secondaryAuth);
-
-                showToast("Administrador creado y asignado exitosamente.");
+                if (!userDocs.empty) {
+                    const userDoc = userDocs.docs[0];
+                    const userData = userDoc.data();
+                    
+                    if (userData.role !== 'admin') {
+                        throw new Error("El ID pertenece a un usuario que no es administrador.");
+                    }
+                    
+                    let updatedSchools = userData.schoolIds || [];
+                    if (userData.schoolId && !updatedSchools.includes(userData.schoolId)) {
+                        updatedSchools.push(userData.schoolId);
+                    }
+                    
+                    if (!updatedSchools.includes(schoolId)) {
+                        updatedSchools.push(schoolId);
+                        await updateDoc(doc(db, "users", userDoc.id), { schoolIds: updatedSchools, name: name });
+                        showToast("Administrador existente vinculado a la nueva escuela.");
+                    } else {
+                        showToast("Este administrador ya está asignado a esa escuela.", "error");
+                    }
+                } else {
+                    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, internalEmail, password);
+                    await setDoc(doc(db, "users", userCredential.user.uid), { 
+                        role: 'admin', 
+                        email: internalEmail, 
+                        identification: ident,
+                        name: name,
+                        schoolIds: [schoolId] 
+                    });
+                    await signOut(secondaryAuth);
+                    showToast("Administrador creado y asignado exitosamente.");
+                }
+                
                 document.getElementById('form-create-admin').reset();
             } catch (error) {
-                if (error.code === 'auth/email-already-in-use') {
-                    showToast("Ese correo ya está registrado.", "error");
-                } else {
-                    showToast(error.message, "error");
-                }
-            } finally {
-                setLoading('btn-create-admin', false);
-            }
+                showToast(error.message, "error");
+            } finally { setLoading('btn-create-admin', false); }
         };
 
         async function loadSuperAdminData() {
             const tbody = document.getElementById('list-schools');
             const selectSchool = document.getElementById('new-admin-school');
-            
             try {
                 const snapshot = await getDocs(collection(db, "schools"));
-                
                 tbody.innerHTML = '';
                 selectSchool.innerHTML = '<option value="">-- Selecciona una escuela --</option>';
-
                 snapshot.forEach(docSnap => {
                     const data = docSnap.data();
-                    
-                    const tr = document.createElement('tr');
-                    tr.className = "hover:bg-slate-50";
-                    tr.innerHTML = `
-                        <td class="p-3 font-bold text-slate-800">${docSnap.id}</td>
-                        <td class="p-3 text-slate-600">${data.name}</td>
-                        <td class="p-3 text-slate-500 text-xs">Registrada</td>
-                    `;
-                    tbody.appendChild(tr);
-
-                    const option = document.createElement('option');
-                    option.value = docSnap.id;
-                    option.textContent = `${data.name} (${docSnap.id})`;
-                    selectSchool.appendChild(option);
+                    tbody.innerHTML += `<tr class="hover:bg-slate-50"><td class="p-3 font-bold text-slate-800">${docSnap.id}</td><td class="p-3 text-slate-600">${data.name}</td><td class="p-3 text-slate-500 text-xs">Registrada</td></tr>`;
+                    selectSchool.innerHTML += `<option value="${docSnap.id}">${data.name} (${docSnap.id})</option>`;
                 });
             } catch (error) {
                 if (error.code === 'permission-denied') showScreen('screen-setup-error');
-                console.error(error);
             }
         }
 
-        // --- LÓGICA ADMIN DE ESCUELA ---
+        // --- LÓGICA UI BÁSICA ---
+        window.togglePaymentMode = (prefix) => {
+            const mode = document.getElementById(`${prefix}-std-payment-mode`).value;
+            const totalC = document.getElementById(`${prefix}-std-total-container`);
+            const monthlyC = document.getElementById(`${prefix}-std-monthly-container`);
+            if (mode === 'monthly') {
+                totalC.classList.add('hidden');
+                monthlyC.classList.remove('hidden');
+                const dateEl = document.getElementById(`${prefix}-std-start-date`);
+                if(!dateEl.value) dateEl.value = new Date().toISOString().split('T')[0];
+            } else {
+                totalC.classList.remove('hidden');
+                monthlyC.classList.add('hidden');
+            }
+        };
+
+        window.openModal = (id) => { 
+            document.getElementById(id).classList.remove('hidden'); 
+            const dateInput = document.querySelector(`#${id} input[type="date"]`);
+            if (dateInput && !dateInput.value) dateInput.value = new Date().toISOString().split('T')[0];
+        };
+        window.closeModal = (id) => { document.getElementById(id).classList.add('hidden'); };
+
+        // ==========================================
+        // CARGA MASIVA DE EXCEL
+        // ==========================================
+
+        window.downloadExcelTemplate = () => {
+            const headers = ["Identificacion", "Nombre_Completo", "Contrasena", "Modalidad", "Valor_Total", "Valor_Mensualidad", "Dia_Cobro"];
+            const sampleData = [
+                ["100123456", "Juan Perez", "123456", "mensual", "", "50000", "5"],
+                ["100654321", "Maria Lopez", "123456", "total", "300000", "", ""]
+            ];
+            const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
+            ws['!cols'] = [{wch: 15}, {wch: 25}, {wch: 15}, {wch: 15}, {wch: 15}, {wch: 20}, {wch: 15}];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Alumnos");
+            XLSX.writeFile(wb, "Plantilla_Carga_Alumnos.xlsx");
+        };
+
+        window.handleBulkUpload = async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('bulk-excel-file');
+            const file = fileInput.files[0];
+            if(!file) return;
+
+            setLoading('btn-process-bulk', true, 'Leyendo Archivo...');
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                try {
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {defval: ""});
+
+                    if(rows.length === 0) { showToast("El archivo está vacío.", "error"); return; }
+
+                    document.getElementById('bulk-upload-progress').classList.remove('hidden');
+                    document.getElementById('bulk-total').textContent = rows.length;
+                    
+                    let successCount = 0; let errorCount = 0;
+
+                    for(let i=0; i<rows.length; i++) {
+                        document.getElementById('bulk-current').textContent = i + 1;
+                        const row = rows[i];
+                        const ident = String(row["Identificacion"] || "").trim();
+                        let name = String(row["Nombre_Completo"] || "").trim();
+                        const password = String(row["Contrasena"] || "").trim();
+                        const mode = (String(row["Modalidad"]).trim().toLowerCase() === 'mensual') ? 'monthly' : 'total';
+                        const internalEmail = `${ident}@estudiante.app`;
+                        
+                        if(!ident) { errorCount++; continue; }
+
+                        const qExisting = query(collection(db, "students"), where("identification", "==", ident));
+                        const existingDocs = await getDocs(qExisting);
+                        
+                        let existingInCurrentSchool = null;
+                        if (!existingDocs.empty) {
+                            if (!name) name = existingDocs.docs[0].data().name;
+                            existingInCurrentSchool = existingDocs.docs.find(d => d.data().schoolId === currentSchoolId);
+                        }
+
+                        if(!name) { errorCount++; continue; }
+
+                        try {
+                            if (password && password !== '********') {
+                                try {
+                                    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, internalEmail, password);
+                                    await setDoc(doc(db, "users", userCredential.user.uid), { role: 'student', email: internalEmail, identification: ident, name: name });
+                                    await signOut(secondaryAuth);
+                                } catch (authErr) { if (authErr.code !== 'auth/email-already-in-use') throw authErr; }
+                            }
+
+                            const studentData = { schoolId: currentSchoolId, identification: ident, name: name, email: internalEmail, paymentMode: mode };
+                            if (mode === 'monthly') {
+                                studentData.monthlyFee = parseFloat(row["Valor_Mensualidad"]) || 0;
+                                studentData.billingDay = parseInt(row["Dia_Cobro"]) || 1;
+                                studentData.startDate = new Date().toISOString().split('T')[0];
+                            } else {
+                                studentData.totalFee = parseFloat(row["Valor_Total"]) || 0;
+                            }
+
+                            if (existingInCurrentSchool) {
+                                studentData.status = existingInCurrentSchool.data().status || 'active';
+                                await updateDoc(doc(db, "students", existingInCurrentSchool.id), studentData);
+                            } else {
+                                studentData.status = 'active';
+                                await addDoc(collection(db, "students"), studentData);
+                            }
+                            successCount++;
+                        } catch (err) { errorCount++; }
+                    }
+
+                    showToast(`Carga masiva finalizada: ${successCount} procesados, ${errorCount} errores.`);
+                    window.closeModal('modal-bulk-upload');
+                    fileInput.value = '';
+                    document.getElementById('bulk-upload-progress').classList.add('hidden');
+                } catch(err) {
+                    showToast("Error crítico al procesar el archivo Excel.", "error");
+                } finally { setLoading('btn-process-bulk', false, 'Procesar Archivo'); }
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
+        // --- CÓDIGO NORMAL DE AGREGAR/EDITAR ALUMNO ---
+        window.searchStudentInfo = async () => {
+            const ident = document.getElementById('new-std-ident').value.trim();
+            if(!ident) return;
+            const q = query(collection(db, "students"), where("identification", "==", ident));
+            const snaps = await getDocs(q);
+            if(!snaps.empty) {
+                const data = snaps.docs[0].data();
+                document.getElementById('new-std-name').value = data.name || '';
+                document.getElementById('new-std-password').value = '********';
+                document.getElementById('new-std-password').disabled = true;
+                showToast("Alumno encontrado. Se vinculará a esta escuela.", "success");
+            } else {
+                document.getElementById('new-std-name').value = '';
+                document.getElementById('new-std-password').value = '';
+                document.getElementById('new-std-password').disabled = false;
+            }
+        };
+
         window.handleAddStudent = async (e) => {
             e.preventDefault();
             setLoading('btn-add-student', true);
             const ident = document.getElementById('new-std-ident').value.trim();
             const name = document.getElementById('new-std-name').value.trim();
-            const email = document.getElementById('new-std-email').value.trim().toLowerCase();
             const password = document.getElementById('new-std-password').value;
-            const totalFee = parseFloat(document.getElementById('new-std-total').value);
+            const mode = document.getElementById('new-std-payment-mode').value;
+            const internalEmail = `${ident}@estudiante.app`;
+            
+            const studentData = {
+                schoolId: currentSchoolId,
+                identification: ident,
+                name: name,
+                email: internalEmail,
+                status: 'active',
+                paymentMode: mode
+            };
+
+            if (mode === 'monthly') {
+                studentData.monthlyFee = parseFloat(document.getElementById('new-std-monthly-fee').value) || 0;
+                studentData.billingDay = parseInt(document.getElementById('new-std-billing-day').value) || 1;
+                studentData.startDate = document.getElementById('new-std-start-date').value;
+            } else {
+                studentData.totalFee = parseFloat(document.getElementById('new-std-total').value) || 0;
+            }
 
             try {
-                const qEmail = query(collection(db, "students"), where("schoolId", "==", currentSchoolId), where("email", "==", email));
-                if (!(await getDocs(qEmail)).empty) throw new Error("Ya existe un alumno con este correo en tu escuela.");
+                const qExisting = query(collection(db, "students"), where("identification", "==", ident), where("schoolId", "==", currentSchoolId));
+                const existingDocs = await getDocs(qExisting);
+                if (!existingDocs.empty) {
+                    throw new Error("Este alumno ya está registrado en esta escuela.");
+                }
 
-                const qIdent = query(collection(db, "students"), where("schoolId", "==", currentSchoolId), where("identification", "==", ident));
-                if (!(await getDocs(qIdent)).empty) throw new Error("Ya existe un alumno con este número de identificación.");
+                if (password && password !== '********') {
+                    try {
+                        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, internalEmail, password);
+                        await setDoc(doc(db, "users", userCredential.user.uid), { role: 'student', email: internalEmail, identification: ident, name: name });
+                        await signOut(secondaryAuth);
+                    } catch (authErr) {
+                        if (authErr.code !== 'auth/email-already-in-use') throw authErr;
+                    }
+                }
 
-                const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-
-                const studentRef = await addDoc(collection(db, "students"), {
-                    schoolId: currentSchoolId,
-                    identification: ident,
-                    name: name,
-                    email: email,
-                    totalFee: totalFee,
-                    status: 'active' 
-                });
-
-                await setDoc(doc(db, "users", userCredential.user.uid), {
-                    role: 'student',
-                    email: email,
-                    schoolId: currentSchoolId,
-                    studentId: studentRef.id
-                });
-
-                await signOut(secondaryAuth);
-
-                showToast("Alumno registrado exitosamente.");
+                await addDoc(collection(db, "students"), studentData);
+                showToast("Alumno procesado exitosamente.");
                 document.getElementById('form-add-student').reset();
                 window.closeModal('modal-add-student');
             } catch (error) {
-                if (error.code === 'auth/email-already-in-use') {
-                    showToast("Ese correo ya está siendo usado por otra persona.", "error");
-                } else if (error.code === 'permission-denied') {
-                    showScreen('screen-setup-error');
-                } else {
-                    showToast(error.message, "error");
-                }
-            } finally {
-                setLoading('btn-add-student', false);
+                showToast(error.message || "Error al registrar alumno.", "error");
+            } finally { setLoading('btn-add-student', false); }
+        };
+
+        window.openEditStudentModal = (id, ident, name, pMode, total, month, day, start) => {
+            document.getElementById('edit-std-id').value = id;
+            document.getElementById('edit-std-ident').value = ident || '';
+            document.getElementById('edit-std-name').value = name;
+            document.getElementById('edit-std-payment-mode').value = pMode || 'total';
+            document.getElementById('edit-std-total').value = total || 0;
+            document.getElementById('edit-std-monthly-fee').value = month || 0;
+            document.getElementById('edit-std-billing-day').value = day || 1;
+            document.getElementById('edit-std-start-date').value = start || '';
+            
+            window.togglePaymentMode('edit');
+            window.openModal('modal-edit-student');
+        };
+
+        window.handleEditStudent = async (e) => {
+            e.preventDefault();
+            setLoading('btn-edit-student', true);
+            const id = document.getElementById('edit-std-id').value;
+            const mode = document.getElementById('edit-std-payment-mode').value;
+            
+            const updateData = {
+                identification: document.getElementById('edit-std-ident').value.trim(),
+                name: document.getElementById('edit-std-name').value.trim(),
+                paymentMode: mode
+            };
+
+            if (mode === 'monthly') {
+                updateData.monthlyFee = parseFloat(document.getElementById('edit-std-monthly-fee').value) || 0;
+                updateData.billingDay = parseInt(document.getElementById('edit-std-billing-day').value) || 1;
+                updateData.startDate = document.getElementById('edit-std-start-date').value;
+            } else {
+                updateData.totalFee = parseFloat(document.getElementById('edit-std-total').value) || 0;
             }
+
+            try {
+                await updateDoc(doc(db, "students", id), updateData);
+                showToast("Datos del alumno actualizados.");
+                window.closeModal('modal-edit-student');
+            } catch (error) { showToast("Error al actualizar.", "error"); } 
+            finally { setLoading('btn-edit-student', false); }
         };
 
-        // Cache de estudiantes y pagos
-        let currentStudents = [];
-        let currentPayments = [];
-        let currentExpenses = [];
-        let currentGeneralIncomes = [];
-        
-        // Cache de Comunicados y Firmas
-        let currentCommuniques = [];
-        let currentAdminSignatures = [];
-        let currentStudentSignatures = [];
-
-        window.openModal = (modalId) => {
-            document.getElementById(modalId).classList.remove('hidden');
-            const dateInput = document.querySelector(`#${modalId} input[type="date"]`);
-            if (dateInput && !dateInput.value) {
-                dateInput.value = new Date().toISOString().split('T')[0];
-            }
+        window.toggleStudentStatus = async (id, currentStatus) => {
+            const newStatus = currentStatus === 'retired' ? 'active' : 'retired';
+            const actionText = newStatus === 'retired' ? 'retirado' : 'reactivado';
+            try {
+                await updateDoc(doc(db, "students", id), { status: newStatus });
+                showToast(`Alumno marcado como ${actionText}.`);
+            } catch (error) { showToast("Error al cambiar estado.", "error"); }
         };
 
-        window.closeModal = (modalId) => {
-            document.getElementById(modalId).classList.add('hidden');
+        window.promptDeleteStudent = (id, name) => {
+            document.getElementById('delete-std-id').value = id;
+            document.getElementById('delete-std-name').textContent = name;
+            window.openModal('modal-confirm-delete');
         };
+
+        window.executeDeleteStudent = async () => {
+            const id = document.getElementById('delete-std-id').value;
+            setLoading('btn-confirm-delete', true, 'Eliminando...');
+            try {
+                await deleteDoc(doc(db, "students", id));
+                showToast("Alumno eliminado del directorio.");
+                window.closeModal('modal-confirm-delete');
+            } catch (error) { showToast("Error al eliminar alumno.", "error"); } 
+            finally { setLoading('btn-confirm-delete', false, 'Sí, Eliminar'); }
+        };
+
+        // --- CACHE Y CARGA ADMIN ---
+        let currentStudents = []; let currentPayments = []; let currentExpenses = []; let currentGeneralIncomes = [];
+        let currentCommuniques = []; let currentAdminSignatures = []; let currentStudentSignatures = [];
 
         function loadAdminData() {
             window.clearListeners();
-            
-            const qStudents = query(collection(db, "students"), where("schoolId", "==", currentSchoolId));
-            activeListeners.push(onSnapshot(qStudents, (snapshot) => {
-                currentStudents = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            activeListeners.push(onSnapshot(query(collection(db, "students"), where("schoolId", "==", currentSchoolId)), (snap) => {
+                currentStudents = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 window.renderAdminTable();
-            }, (error) => {
-                if (error.code === 'permission-denied') showScreen('screen-setup-error');
             }));
-
-            const qPayments = query(collection(db, "payments"), where("schoolId", "==", currentSchoolId));
-            activeListeners.push(onSnapshot(qPayments, (snapshot) => {
-                currentPayments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            activeListeners.push(onSnapshot(query(collection(db, "payments"), where("schoolId", "==", currentSchoolId)), (snap) => {
+                currentPayments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 window.renderAdminTable();
                 renderAdminDashboardStats();
-            }, (error) => {
-                if (error.code === 'permission-denied') showScreen('screen-setup-error');
             }));
-
-            const qExpenses = query(collection(db, "expenses"), where("schoolId", "==", currentSchoolId));
-            activeListeners.push(onSnapshot(qExpenses, (snapshot) => {
-                currentExpenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            activeListeners.push(onSnapshot(query(collection(db, "expenses"), where("schoolId", "==", currentSchoolId)), (snap) => {
+                currentExpenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 renderAdminDashboardStats();
-            }, (error) => {
-                if (error.code === 'permission-denied') showScreen('screen-setup-error');
             }));
-            
-            const qIncomes = query(collection(db, "general_incomes"), where("schoolId", "==", currentSchoolId));
-            activeListeners.push(onSnapshot(qIncomes, (snapshot) => {
-                currentGeneralIncomes = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            activeListeners.push(onSnapshot(query(collection(db, "general_incomes"), where("schoolId", "==", currentSchoolId)), (snap) => {
+                currentGeneralIncomes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 renderAdminDashboardStats();
-            }, (error) => {
-                if (error.code === 'permission-denied') showScreen('screen-setup-error');
             }));
-
-            const qCommuniques = query(collection(db, "communiques"), where("schoolId", "==", currentSchoolId));
-            activeListeners.push(onSnapshot(qCommuniques, (snapshot) => {
-                currentCommuniques = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            activeListeners.push(onSnapshot(query(collection(db, "communiques"), where("schoolId", "==", currentSchoolId)), (snap) => {
+                currentCommuniques = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 window.renderAdminCommuniques();
-            }, (error) => {
-                if (error.code === 'permission-denied') showScreen('screen-setup-error');
             }));
-
-            const qAdminSignatures = query(collection(db, "signatures"), where("schoolId", "==", currentSchoolId));
-            activeListeners.push(onSnapshot(qAdminSignatures, (snapshot) => {
-                currentAdminSignatures = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            activeListeners.push(onSnapshot(query(collection(db, "signatures"), where("schoolId", "==", currentSchoolId)), (snap) => {
+                currentAdminSignatures = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 window.renderAdminCommuniques();
-            }, (error) => {
-                if (error.code === 'permission-denied') showScreen('screen-setup-error');
             }));
         }
+
+        window.renderAdminTable = function() {
+            const tbody = document.getElementById('list-admin-students');
+            const searchTerm = (document.getElementById('search-student')?.value || '').toLowerCase();
+            tbody.innerHTML = '';
+            
+            const filteredStudents = currentStudents.filter(s => s.name.toLowerCase().includes(searchTerm) || (s.identification && s.identification.toLowerCase().includes(searchTerm)));
+            if(filteredStudents.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-slate-500">No se encontraron alumnos.</td></tr>`; return; }
+
+            filteredStudents.forEach(student => {
+                const isRetired = student.status === 'retired';
+                const totalOwed = window.calculateOwed(student);
+                const totalPaid = currentPayments.filter(p => p.studentId === student.id).reduce((sum, p) => sum + p.amount, 0);
+                const debt = totalOwed - totalPaid;
+                
+                let debtHtml = '';
+                if (isRetired) {
+                    debtHtml = `<span class="text-slate-500 font-bold text-xs bg-slate-200 px-2 py-1 rounded">Congelado (${formatCurrency(debt)})</span>`;
+                } else {
+                    debtHtml = debt <= 0 
+                        ? `<span class="text-green-600 font-bold text-xs bg-green-100 px-2 py-1 rounded">Paz y Salvo</span>` 
+                        : `<span class="text-red-600 font-bold">${formatCurrency(debt)}</span>`;
+                }
+
+                const labelMode = student.paymentMode === 'monthly' ? `Mensualidad (${formatCurrency(student.monthlyFee)})` : 'Pago Total';
+                const identDisplay = student.identification ? `<span class="block text-xs ${isRetired ? 'text-slate-400' : 'text-slate-500'}">ID: ${student.identification}</span>` : '';
+                const retiredBadge = isRetired ? `<span class="bg-slate-300 text-slate-600 text-[10px] px-2 py-0.5 rounded-full ml-2 font-bold uppercase">Retirado</span>` : '';
+
+                tbody.innerHTML += `
+                    <tr class="${isRetired ? 'bg-slate-50 opacity-70' : 'hover:bg-slate-50'}">
+                        <td class="p-3">
+                            <div class="flex items-center flex-wrap gap-1">
+                                <span class="font-medium ${isRetired ? 'text-slate-500 line-through' : 'text-slate-800'}">${student.name}</span>
+                                ${retiredBadge}
+                            </div>
+                            ${identDisplay}
+                        </td>
+                        <td class="p-3 ${isRetired ? 'text-slate-400' : 'text-slate-500'} text-xs">${student.email}</td>
+                        <td class="p-3 whitespace-nowrap">
+                            <div class="text-xs text-slate-500">${labelMode}</div>
+                            <div class="mt-1">Deuda: ${debtHtml}</div>
+                        </td>
+                        <td class="p-3 text-center">
+                            <div class="flex justify-center gap-1">
+                                <button onclick="window.openPaymentModal('${student.id}', '${student.name}')" ${isRetired ? 'disabled' : ''} class="${isRetired ? 'text-slate-300 cursor-not-allowed' : 'text-green-600 hover:bg-green-100'} p-2 rounded" title="Abonar"><i class="fa-solid fa-plus"></i></button>
+                                <button onclick="window.openEditStudentModal('${student.id}', '${student.identification}', '${student.name}', '${student.paymentMode}', ${student.totalFee}, ${student.monthlyFee}, ${student.billingDay}, '${student.startDate}')" class="text-blue-600 hover:bg-blue-100 p-2 rounded" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                                <button onclick="window.toggleStudentStatus('${student.id}', '${student.status || 'active'}')" class="text-orange-500 hover:bg-orange-100 p-2 rounded" title="${isRetired ? 'Reactivar Alumno' : 'Marcar como Retirado'}"><i class="fa-solid ${isRetired ? 'fa-user-check' : 'fa-user-slash'}"></i></button>
+                                <button onclick="window.promptDeleteStudent('${student.id}', '${student.name}')" class="text-red-600 hover:bg-red-100 p-2 rounded" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+        };
 
         function renderAdminDashboardStats() {
             const studentPaymentsTotal = currentPayments.reduce((sum, p) => sum + p.amount, 0);
             const generalIncomesTotal = currentGeneralIncomes.reduce((sum, i) => sum + i.amount, 0);
-            
             const totalIncome = studentPaymentsTotal + generalIncomesTotal;
             const totalExpense = currentExpenses.reduce((sum, e) => sum + e.amount, 0);
             const balance = totalIncome - totalExpense;
@@ -1181,21 +1658,12 @@ service cloud.firestore {
             
             const balanceEl = document.getElementById('admin-balance');
             balanceEl.textContent = formatCurrency(balance);
-            if (balance < 0) {
-                balanceEl.classList.remove('text-blue-600');
-                balanceEl.classList.add('text-red-600');
-            } else {
-                balanceEl.classList.remove('text-red-600');
-                balanceEl.classList.add('text-blue-600');
-            }
+            if (balance < 0) { balanceEl.classList.replace('text-blue-600', 'text-red-600'); } 
+            else { balanceEl.classList.replace('text-red-600', 'text-blue-600'); }
 
             window.renderTransactionHistory();
         }
 
-        // ==========================================
-        // HISTORIAL DE TRANSACCIONES Y PDF
-        // ==========================================
-        
         window.renderTransactionHistory = function() {
             const tbody = document.getElementById('list-admin-transactions');
             tbody.innerHTML = '';
@@ -1233,8 +1701,8 @@ service cloud.firestore {
             });
         };
 
+        // --- PDF GENERATOR ---
         let reportChartInstance = null;
-
         window.generatePDFReport = async (e) => {
             const btn = e.currentTarget;
             const originalHtml = btn.innerHTML;
@@ -1246,39 +1714,37 @@ service cloud.firestore {
                 document.getElementById('report-school-name').textContent = schoolName;
                 document.getElementById('report-date').textContent = new Date().toLocaleDateString('es-CO');
 
-                const studentPaymentsTotal = currentPayments.reduce((sum, p) => sum + p.amount, 0);
-                const generalIncomesTotal = currentGeneralIncomes.reduce((sum, i) => sum + i.amount, 0);
-                const totalIncome = studentPaymentsTotal + generalIncomesTotal;
-                const totalExpense = currentExpenses.reduce((sum, e) => sum + e.amount, 0);
+                const totalIncome = currentPayments.reduce((s, p) => s + p.amount, 0) + currentGeneralIncomes.reduce((s, i) => s + i.amount, 0);
+                const totalExpense = currentExpenses.reduce((s, e) => s + e.amount, 0);
                 const balance = totalIncome - totalExpense;
 
                 document.getElementById('rep-inc').textContent = formatCurrency(totalIncome);
                 document.getElementById('rep-exp').textContent = formatCurrency(totalExpense);
                 document.getElementById('rep-bal').textContent = formatCurrency(balance);
 
+                const tbody = document.getElementById('report-transactions-body');
+                tbody.innerHTML = '';
+                const txList = document.getElementById('list-admin-transactions').cloneNode(true);
+                // Solo tomar las primeras 10 transacciones para el resumen del PDF
+                Array.from(txList.children).slice(0,10).forEach(tr => {
+                    const clonedTr = tr.cloneNode(true);
+                    clonedTr.style.borderBottom = "1px solid #e2e8f0";
+                    clonedTr.children[1].style.display = "none"; // ocultar badge
+                    tbody.appendChild(clonedTr);
+                });
+
                 const ctx = document.getElementById('report-chart').getContext('2d');
                 if(reportChartInstance) reportChartInstance.destroy(); 
-                
                 reportChartInstance = new Chart(ctx, {
                     type: 'doughnut', 
                     data: {
                         labels: ['Ingresos Totales', 'Egresos Totales'],
-                        datasets: [{
-                            data: [totalIncome, totalExpense],
-                            backgroundColor: ['#16a34a', '#dc2626'],
-                            borderWidth: 2,
-                            borderColor: '#ffffff'
-                        }]
+                        datasets: [{ data: [totalIncome, totalExpense], backgroundColor: ['#16a34a', '#dc2626'], borderWidth: 2, borderColor: '#ffffff' }]
                     },
-                    options: {
-                        animation: false, 
-                        plugins: {
-                            legend: { position: 'bottom', labels: { font: { size: 16 } } }
-                        }
-                    }
+                    options: { animation: false, plugins: { legend: { position: 'bottom' } } }
                 });
 
-                await new Promise(resolve => setTimeout(resolve, 300));
+                await new Promise(resolve => setTimeout(resolve, 500));
 
                 const container = document.getElementById('report-container');
                 const canvas = await html2canvas(container, { scale: 2 });
@@ -1286,45 +1752,28 @@ service cloud.firestore {
 
                 const { jsPDF } = window.jspdf;
                 const pdf = new jsPDF('p', 'mm', 'a4'); 
-                
                 const pdfWidth = pdf.internal.pageSize.getWidth();
                 const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
                 
                 pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-                
-                pdf.save(`Informe_Financiero_${schoolName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`);
-                showToast("Informe PDF generado correctamente.");
-
-            } catch (err) {
-                console.error(err);
-                showToast("Error al generar el informe.", "error");
-            } finally {
-                btn.innerHTML = originalHtml;
-                btn.disabled = false;
-            }
+                pdf.save(`Informe_${schoolName.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+                showToast("Informe PDF generado.");
+            } catch (err) { showToast("Error al generar PDF.", "error"); } 
+            finally { btn.innerHTML = originalHtml; btn.disabled = false; }
         };
 
-        // ==========================================
-        // FUNCIONES DE RECIBO Y WHATSAPP (NUEVO)
-        // ==========================================
+        // --- RECIBOS Y WHATSAPP ---
         window.showReceiptModal = (type, data) => {
-            let schoolNameText = "Grupo Scout";
-            const schoolHeaderEl = document.getElementById('admin-school-display-id');
-            if(schoolHeaderEl && schoolHeaderEl.textContent) {
-                schoolNameText = schoolHeaderEl.textContent;
-            }
-
+            const schoolNameText = document.getElementById('admin-school-display-id').textContent || "Grupo Scout";
             document.getElementById('rec-school').textContent = schoolNameText;
             
-            let typeLabel = "COMPROBANTE";
-            let colorClass = "text-blue-700";
+            let typeLabel = "COMPROBANTE"; let colorClass = "text-blue-700";
             if (type === 'abono') { typeLabel = "RECIBO DE ABONO"; colorClass = "text-green-700"; }
             if (type === 'ingreso') { typeLabel = "INGRESO GENERAL"; colorClass = "text-blue-700"; }
             if (type === 'egreso') { typeLabel = "COMPROBANTE EGRESO"; colorClass = "text-red-700"; }
             
             const recTypeEl = document.getElementById('rec-type');
-            recTypeEl.textContent = typeLabel;
-            recTypeEl.className = `font-bold text-base uppercase ${colorClass}`;
+            recTypeEl.textContent = typeLabel; recTypeEl.className = `font-bold text-base uppercase ${colorClass}`;
             
             document.getElementById('rec-date').textContent = `Fecha: ${formatDate(data.date)}`;
             document.getElementById('rec-amount').textContent = formatCurrency(data.amount);
@@ -1334,9 +1783,7 @@ service cloud.firestore {
             if(data.name) {
                 nameContainer.style.display = 'flex';
                 document.getElementById('rec-name').textContent = data.name;
-            } else {
-                nameContainer.style.display = 'none';
-            }
+            } else { nameContainer.style.display = 'none'; }
 
             document.getElementById('wa-number').value = '';
             window.openModal('modal-receipt');
@@ -1346,24 +1793,15 @@ service cloud.firestore {
             const ticket = document.getElementById('receipt-ticket');
             try {
                 const canvas = await html2canvas(ticket, { scale: 2 });
-                const url = canvas.toDataURL("image/png");
                 const a = document.createElement('a');
-                a.href = url;
-                a.download = `Recibo_${Date.now()}.png`;
-                a.click();
-                showToast("Imagen descargada con éxito.");
-            } catch (err) {
-                showToast("No se pudo generar la imagen.", "error");
-            }
+                a.href = canvas.toDataURL("image/png"); a.download = `Recibo_${Date.now()}.png`; a.click();
+            } catch (err) { showToast("No se pudo generar la imagen.", "error"); }
         };
 
         window.handleSendWhatsApp = async (e) => {
             e.preventDefault();
             const num = document.getElementById('wa-number').value.replace(/\D/g,'');
-            if(!num) {
-                showToast("Debes ingresar el número de celular.", "error");
-                return;
-            }
+            if(!num) { showToast("Ingresa el número celular.", "error"); return; }
 
             setLoading('btn-send-wa', true, '');
             try {
@@ -1377,38 +1815,23 @@ service cloud.firestore {
                     const textMsg = `Hola, adjunto el *${typeLabel}* por valor de ${amount}.`;
 
                     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                        navigator.share({
-                            files: [file],
-                            title: 'Recibo',
-                            text: textMsg
-                        }).catch(err => {
-                            window.fallbackWhatsApp(blob, num, textMsg);
-                        });
-                    } else {
-                        window.fallbackWhatsApp(blob, num, textMsg);
-                    }
+                        navigator.share({ files: [file], title: 'Recibo', text: textMsg })
+                        .catch(() => window.fallbackWhatsApp(blob, num, textMsg));
+                    } else { window.fallbackWhatsApp(blob, num, textMsg); }
                 }, 'image/png');
-            } catch (err) {
-                showToast("Error al procesar la imagen.", "error");
-            } finally {
-                setLoading('btn-send-wa', false);
-            }
+            } catch (err) { showToast("Error de imagen.", "error"); } 
+            finally { setLoading('btn-send-wa', false, '<i class="fa-brands fa-whatsapp text-lg"></i> Enviar'); }
         };
 
         window.fallbackWhatsApp = (blob, num, textMsg) => {
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `Recibo.png`;
-            a.click();
-
-            const waUrl = `https://wa.me/57${num}?text=${encodeURIComponent(textMsg + " (Por favor, adjunta la imagen del recibo que se acaba de descargar en tu dispositivo)")}`;
+            const a = document.createElement('a'); a.href = url; a.download = `Recibo.png`; a.click();
+            const waUrl = `https://wa.me/57${num}?text=${encodeURIComponent(textMsg + " (Por favor, adjunta la imagen del recibo descargado)")}`;
             window.open(waUrl, '_blank');
             window.closeModal('modal-receipt');
         };
 
-        // --- MANEJADORES DE FINANZAS ACTUALIZADOS ---
-
+        // --- MANEJADORES DE FINANZAS ---
         window.handleAddExpense = async (e) => {
             e.preventDefault();
             setLoading('btn-add-expense', true);
@@ -1417,25 +1840,13 @@ service cloud.firestore {
             const date = document.getElementById('new-exp-date').value;
 
             try {
-                await addDoc(collection(db, "expenses"), {
-                    schoolId: currentSchoolId,
-                    amount: amount,
-                    concept: concept,
-                    date: date,
-                    timestamp: serverTimestamp()
-                });
-                showToast("Egreso registrado exitosamente.");
-                document.getElementById('new-exp-amount').value = '';
-                document.getElementById('new-exp-concept').value = '';
+                await addDoc(collection(db, "expenses"), { schoolId: currentSchoolId, amount, concept, date, timestamp: serverTimestamp() });
+                showToast("Egreso registrado.");
+                document.getElementById('form-add-expense').reset();
                 window.closeModal('modal-add-expense');
-                
                 window.showReceiptModal('egreso', { amount, date, concept, name: null });
-            } catch (error) {
-                if (error.code === 'permission-denied') showScreen('screen-setup-error');
-                else showToast("Error al registrar egreso", "error");
-            } finally {
-                setLoading('btn-add-expense', false);
-            }
+            } catch (error) { showToast("Error", "error"); } 
+            finally { setLoading('btn-add-expense', false); }
         };
 
         window.handleAddIncome = async (e) => {
@@ -1446,25 +1857,20 @@ service cloud.firestore {
             const date = document.getElementById('new-inc-date').value;
 
             try {
-                await addDoc(collection(db, "general_incomes"), {
-                    schoolId: currentSchoolId,
-                    amount: amount,
-                    concept: concept,
-                    date: date,
-                    timestamp: serverTimestamp()
-                });
-                showToast("Ingreso general registrado exitosamente.");
+                await addDoc(collection(db, "general_incomes"), { schoolId: currentSchoolId, amount, concept, date, timestamp: serverTimestamp() });
+                showToast("Ingreso general registrado.");
                 document.getElementById('form-add-income').reset();
                 window.closeModal('modal-add-income');
-                
                 window.showReceiptModal('ingreso', { amount, date, concept, name: null });
-            } catch (error) {
-                if (error.code === 'permission-denied') showScreen('screen-setup-error');
-                else showToast("Error al registrar ingreso", "error");
-            } finally {
-                setLoading('btn-add-income', false);
-            }
+            } catch (error) { showToast("Error", "error"); } 
+            finally { setLoading('btn-add-income', false); }
         };
+
+        window.openPaymentModal = (id, name) => {
+            document.getElementById('modal-std-id').value = id;
+            document.getElementById('modal-std-name').textContent = name;
+            window.openModal('modal-payment');
+        }
 
         window.handleProcessPayment = async (e) => {
             e.preventDefault();
@@ -1473,282 +1879,18 @@ service cloud.firestore {
             const studentName = document.getElementById('modal-std-name').textContent;
             const amount = parseFloat(document.getElementById('payment-amount').value);
             const date = document.getElementById('payment-date').value;
-            const note = document.getElementById('payment-note').value.trim() || 'Abono de cuota';
+            const note = document.getElementById('payment-note').value.trim() || 'Abono';
 
             try {
-                await addDoc(collection(db, "payments"), {
-                    schoolId: currentSchoolId,
-                    studentId: studentId,
-                    amount: amount,
-                    date: date,
-                    note: note,
-                    timestamp: serverTimestamp()
-                });
+                await addDoc(collection(db, "payments"), { schoolId: currentSchoolId, studentId, amount, date, note, timestamp: serverTimestamp() });
                 showToast("Pago registrado exitosamente");
-                window.closePaymentModal();
-                
+                window.closeModal('modal-payment');
                 window.showReceiptModal('abono', { amount, date, concept: note, name: studentName });
-            } catch (error) {
-                if (error.code === 'permission-denied') showScreen('screen-setup-error');
-                else showToast("Error al guardar el pago", "error");
-            } finally {
-                setLoading('btn-save-payment', false);
-            }
+            } catch (err) { showToast("Error", "error"); } 
+            finally { setLoading('btn-save-payment', false); }
         };
 
-        // --- FUNCIONES EDICIÓN ALUMNO ---
-        window.openEditStudentModal = (id, ident, name, totalFee) => {
-            document.getElementById('edit-std-id').value = id;
-            document.getElementById('edit-std-ident').value = ident || '';
-            document.getElementById('edit-std-name').value = name;
-            document.getElementById('edit-std-total').value = totalFee;
-            window.openModal('modal-edit-student');
-        };
-
-        window.handleEditStudent = async (e) => {
-            e.preventDefault();
-            setLoading('btn-edit-student', true);
-            const id = document.getElementById('edit-std-id').value;
-            const ident = document.getElementById('edit-std-ident').value.trim();
-            const name = document.getElementById('edit-std-name').value.trim();
-            const totalFee = parseFloat(document.getElementById('edit-std-total').value);
-
-            try {
-                const qIdent = query(collection(db, "students"), where("schoolId", "==", currentSchoolId), where("identification", "==", ident));
-                const docs = await getDocs(qIdent);
-                const isDuplicate = docs.docs.some(doc => doc.id !== id);
-                if (isDuplicate) throw new Error("Ya existe otro alumno con este número de identificación.");
-
-                await updateDoc(doc(db, "students", id), {
-                    identification: ident,
-                    name: name,
-                    totalFee: totalFee
-                });
-                showToast("Datos del alumno actualizados.");
-                window.closeModal('modal-edit-student');
-            } catch (error) {
-                if (error.code === 'permission-denied') showScreen('screen-setup-error');
-                else showToast(error.message, "error");
-            } finally {
-                setLoading('btn-edit-student', false);
-            }
-        };
-
-        window.toggleStudentStatus = async (id, currentStatus) => {
-            const newStatus = currentStatus === 'retired' ? 'active' : 'retired';
-            const actionText = newStatus === 'retired' ? 'retirado' : 'reactivado';
-            try {
-                await updateDoc(doc(db, "students", id), {
-                    status: newStatus
-                });
-                showToast(`Alumno marcado como ${actionText}.`);
-            } catch (error) {
-                if (error.code === 'permission-denied') showScreen('screen-setup-error');
-                else showToast("Error al cambiar estado.", "error");
-            }
-        };
-
-        window.promptDeleteStudent = (id, name) => {
-            document.getElementById('delete-std-id').value = id;
-            document.getElementById('delete-std-name').textContent = name;
-            window.openModal('modal-confirm-delete');
-        };
-
-        window.executeDeleteStudent = async () => {
-            const id = document.getElementById('delete-std-id').value;
-            const btn = document.getElementById('btn-confirm-delete');
-            const originalText = btn.innerText;
-            btn.innerText = 'Eliminando...';
-            btn.disabled = true;
-
-            try {
-                await deleteDoc(doc(db, "students", id));
-                showToast("Alumno eliminado del directorio.");
-                window.closeModal('modal-confirm-delete');
-            } catch (error) {
-                if (error.code === 'permission-denied') showScreen('screen-setup-error');
-                else showToast("Error al eliminar alumno.", "error");
-            } finally {
-                btn.innerText = originalText;
-                btn.disabled = false;
-            }
-        };
-
-        window.renderAdminTable = function() {
-            const tbody = document.getElementById('list-admin-students');
-            const searchTerm = (document.getElementById('search-student')?.value || '').toLowerCase();
-            tbody.innerHTML = '';
-            
-            const filteredStudents = currentStudents.filter(s => 
-                s.name.toLowerCase().includes(searchTerm) || 
-                (s.identification && s.identification.toLowerCase().includes(searchTerm))
-            );
-            
-            if(filteredStudents.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-slate-500">No se encontraron alumnos.</td></tr>`;
-                return;
-            }
-
-            filteredStudents.forEach(student => {
-                const isRetired = student.status === 'retired';
-                const stdPayments = currentPayments.filter(p => p.studentId === student.id);
-                const totalPaid = stdPayments.reduce((sum, p) => sum + p.amount, 0);
-                const debt = student.totalFee - totalPaid;
-                
-                let debtHtml = '';
-                if (isRetired) {
-                    debtHtml = `<span class="text-slate-500 font-bold text-xs bg-slate-200 px-2 py-1 rounded">Congelado (${formatCurrency(debt)})</span>`;
-                } else {
-                    debtHtml = debt <= 0 
-                        ? `<span class="text-green-600 font-bold text-xs bg-green-100 px-2 py-1 rounded">Paz y Salvo</span>` 
-                        : `<span class="text-red-600 font-bold">${formatCurrency(debt)}</span>`;
-                }
-
-                const identDisplay = student.identification ? `<span class="block text-xs ${isRetired ? 'text-slate-400' : 'text-slate-500'}">ID: ${student.identification}</span>` : '';
-                const retiredBadge = isRetired ? `<span class="bg-slate-300 text-slate-600 text-[10px] px-2 py-0.5 rounded-full ml-2 font-bold uppercase">Retirado</span>` : '';
-                const rowClass = isRetired ? "bg-slate-50 opacity-70" : "hover:bg-slate-50";
-
-                const tr = document.createElement('tr');
-                tr.className = rowClass;
-                tr.innerHTML = `
-                    <td class="p-3 min-w-[160px]">
-                        <div class="flex items-center flex-wrap gap-1">
-                            <span class="font-medium ${isRetired ? 'text-slate-500 line-through' : 'text-slate-800'}">${student.name}</span>
-                            ${retiredBadge}
-                        </div>
-                        ${identDisplay}
-                    </td>
-                    <td class="p-3 ${isRetired ? 'text-slate-400' : 'text-slate-500'} text-xs">${student.email}</td>
-                    <td class="p-3 whitespace-nowrap">
-                        <div class="text-xs ${isRetired ? 'text-slate-400' : 'text-slate-500'}">Total: ${formatCurrency(student.totalFee)}</div>
-                        <div class="mt-1">Deuda: ${debtHtml}</div>
-                    </td>
-                    <td class="p-3 text-center whitespace-nowrap">
-                        <div class="flex justify-center items-center gap-1">
-                            <button onclick="window.openPaymentModal('${student.id}', '${student.name}')" ${isRetired ? 'disabled' : ''} class="${isRetired ? 'text-slate-300 cursor-not-allowed' : 'text-green-600 hover:bg-green-100'} p-2 rounded transition-colors" title="Abonar">
-                                <i class="fa-solid fa-plus"></i>
-                            </button>
-                            <button onclick="window.openEditStudentModal('${student.id}', '${student.identification}', '${student.name}', ${student.totalFee})" class="text-blue-600 hover:bg-blue-100 p-2 rounded transition-colors" title="Editar Alumno">
-                                <i class="fa-solid fa-pen"></i>
-                            </button>
-                            <button onclick="window.toggleStudentStatus('${student.id}', '${student.status || 'active'}')" class="text-orange-500 hover:bg-orange-100 p-2 rounded transition-colors" title="${isRetired ? 'Reactivar Alumno' : 'Marcar como Retirado'}">
-                                <i class="fa-solid ${isRetired ? 'fa-user-check' : 'fa-user-slash'}"></i>
-                            </button>
-                            <button onclick="window.promptDeleteStudent('${student.id}', '${student.name}')" class="text-red-600 hover:bg-red-100 p-2 rounded transition-colors" title="Eliminar Alumno">
-                                <i class="fa-solid fa-trash"></i>
-                            </button>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        };
-
-        window.openPaymentModal = (studentId, studentName) => {
-            document.getElementById('modal-std-id').value = studentId;
-            document.getElementById('modal-std-name').textContent = studentName;
-            document.getElementById('payment-date').value = new Date().toISOString().split('T')[0];
-            document.getElementById('modal-payment').classList.remove('hidden');
-        };
-
-        window.closePaymentModal = () => {
-            document.getElementById('modal-payment').classList.add('hidden');
-            document.getElementById('form-add-payment').reset();
-        };
-
-        // --- LÓGICA ALUMNO ---
-        async function loadStudentData() {
-            if(!currentStudentId || !currentSchoolId) return;
-
-            try {
-                const [studentDoc, schoolDoc] = await Promise.all([
-                    getDoc(doc(db, "students", currentStudentId)),
-                    getDoc(doc(db, "schools", currentSchoolId))
-                ]);
-
-                if(studentDoc.exists() && schoolDoc.exists()) {
-                    const student = studentDoc.data();
-                    document.getElementById('dash-std-name').textContent = student.name;
-                    document.getElementById('dash-std-school').textContent = schoolDoc.data().name;
-                    document.getElementById('dash-std-total').textContent = formatCurrency(student.totalFee);
-
-                    window.clearListeners();
-
-                    const qPayments = query(collection(db, "payments"), where("studentId", "==", currentStudentId));
-                    activeListeners.push(onSnapshot(qPayments, (snapshot) => {
-                        let totalPaid = 0;
-                        const paymentsList = [];
-                        
-                        snapshot.forEach(doc => {
-                            const p = doc.data();
-                            totalPaid += p.amount;
-                            paymentsList.push(p);
-                        });
-
-                        const debt = student.totalFee - totalPaid;
-                        const progress = student.totalFee > 0 ? Math.min(100, Math.round((totalPaid / student.totalFee) * 100)) : 0;
-
-                        document.getElementById('dash-std-paid').textContent = formatCurrency(totalPaid);
-                        const debtEl = document.getElementById('dash-std-debt');
-                        if (debt <= 0) {
-                            debtEl.textContent = '¡Paz y Salvo!';
-                            debtEl.className = 'text-2xl font-bold text-green-600';
-                        } else {
-                            debtEl.textContent = formatCurrency(debt);
-                            debtEl.className = 'text-2xl font-bold text-red-600';
-                        }
-
-                        document.getElementById('dash-std-progress-text').textContent = `${progress}% Pagado`;
-                        document.getElementById('dash-std-progress-bar').style.width = `${progress}%`;
-
-                        paymentsList.sort((a, b) => new Date(b.date) - new Date(a.date));
-                        const tbody = document.getElementById('dash-std-payments');
-                        tbody.innerHTML = '';
-                        
-                        if(paymentsList.length === 0) {
-                            tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-slate-500">Aún no tienes abonos registrados.</td></tr>`;
-                        } else {
-                            paymentsList.forEach(p => {
-                                tbody.innerHTML += `
-                                    <tr class="hover:bg-slate-50">
-                                        <td class="p-4">${formatDate(p.date)}</td>
-                                        <td class="p-4">${p.note}</td>
-                                        <td class="p-4 text-right font-medium text-green-600">+${formatCurrency(p.amount)}</td>
-                                    </tr>`;
-                            });
-                        }
-                    }, (error) => {
-                        if (error.code === 'permission-denied') showScreen('screen-setup-error');
-                    }));
-
-                    const qStdCommuniques = query(collection(db, "communiques"), where("schoolId", "==", currentSchoolId));
-                    activeListeners.push(onSnapshot(qStdCommuniques, (snapshot) => {
-                        currentCommuniques = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                        window.renderStudentCommuniques();
-                    }, (error) => {
-                        if (error.code === 'permission-denied') showScreen('screen-setup-error');
-                    }));
-
-                    const qStdSignatures = query(collection(db, "signatures"), where("studentId", "==", currentStudentId));
-                    activeListeners.push(onSnapshot(qStdSignatures, (snapshot) => {
-                        currentStudentSignatures = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                        window.renderStudentCommuniques();
-                    }, (error) => {
-                        if (error.code === 'permission-denied') showScreen('screen-setup-error');
-                    }));
-
-                }
-            } catch (error) {
-                console.error("Error cargando datos del estudiante:", error);
-                if (error.code === 'permission-denied') showScreen('screen-setup-error');
-                else showToast("Error de conexión", "error");
-            }
-        }
-
-        // ==========================================
-        // LÓGICA DE COMUNICADOS Y FIRMAS
-        // ==========================================
-
+        // --- COMUNICADOS Y FIRMAS ---
         window.handleAddCommunique = async (e) => {
             e.preventDefault();
             setLoading('btn-add-communique', true);
@@ -1759,40 +1901,25 @@ service cloud.firestore {
 
             try {
                 await addDoc(collection(db, "communiques"), {
-                    schoolId: currentSchoolId,
-                    title: title,
-                    content: content,
-                    documentUrl: documentUrl,
-                    requiresSignature: requiresSignature,
-                    date: new Date().toISOString().split('T')[0],
-                    timestamp: serverTimestamp()
+                    schoolId: currentSchoolId, title, content, documentUrl, requiresSignature,
+                    date: new Date().toISOString().split('T')[0], timestamp: serverTimestamp()
                 });
                 showToast("Comunicado publicado exitosamente.");
                 document.getElementById('form-add-communique').reset();
                 window.closeModal('modal-add-communique');
-            } catch (error) {
-                showToast("Error al publicar comunicado.", "error");
-            } finally {
-                setLoading('btn-add-communique', false);
-            }
+            } catch (error) { showToast("Error al publicar.", "error"); } 
+            finally { setLoading('btn-add-communique', false); }
         };
 
         window.renderAdminCommuniques = function() {
             const tbody = document.getElementById('list-admin-communiques');
             tbody.innerHTML = '';
-            
-            if(currentCommuniques.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-slate-500">No hay comunicados publicados.</td></tr>`;
-                return;
-            }
+            if(currentCommuniques.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-slate-500">No hay comunicados publicados.</td></tr>`; return; }
 
             const sorted = [...currentCommuniques].sort((a, b) => new Date(b.date) - new Date(a.date));
 
             sorted.forEach(com => {
-                const reqBadge = com.requiresSignature 
-                    ? `<span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-bold">Sí</span>` 
-                    : `<span class="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded">No</span>`;
-                
+                const reqBadge = com.requiresSignature ? `<span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-bold">Sí</span>` : `<span class="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded">No</span>`;
                 let actionsHtml = `<button onclick="window.promptDeleteCommunique('${com.id}')" class="text-red-500 hover:bg-red-50 p-2 rounded" title="Eliminar"><i class="fa-solid fa-trash"></i></button>`;
                 
                 if(com.requiresSignature) {
@@ -1821,42 +1948,24 @@ service cloud.firestore {
             });
         };
 
-        window.promptDeleteCommunique = (id) => {
-            document.getElementById('delete-com-id').value = id;
-            window.openModal('modal-confirm-delete-communique');
-        };
-
+        window.promptDeleteCommunique = (id) => { document.getElementById('delete-com-id').value = id; window.openModal('modal-confirm-delete-communique'); };
         window.executeDeleteCommunique = async () => {
             const id = document.getElementById('delete-com-id').value;
-            const btn = document.getElementById('btn-confirm-delete-com');
-            const originalText = btn.innerText;
-            btn.innerText = 'Eliminando...';
-            btn.disabled = true;
-
+            setLoading('btn-confirm-delete-com', true, 'Eliminando...');
             try {
                 await deleteDoc(doc(db, "communiques", id));
-                
-                const qSigs = query(collection(db, "signatures"), where("communiqueId", "==", id));
-                const sigsSnapshot = await getDocs(qSigs);
-                sigsSnapshot.forEach(async (sigDoc) => {
-                    await deleteDoc(doc(db, "signatures", sigDoc.id));
-                });
-
+                const sigsSnapshot = await getDocs(query(collection(db, "signatures"), where("communiqueId", "==", id)));
+                sigsSnapshot.forEach(async (sigDoc) => await deleteDoc(doc(db, "signatures", sigDoc.id)));
                 showToast("Comunicado eliminado.");
                 window.closeModal('modal-confirm-delete-communique');
-            } catch (error) {
-                showToast("Error al eliminar.", "error");
-            } finally {
-                btn.innerText = originalText;
-                btn.disabled = false;
-            }
+            } catch (error) { showToast("Error al eliminar.", "error"); } 
+            finally { setLoading('btn-confirm-delete-com', false, 'Sí, Eliminar'); }
         };
 
         window.openViewSignatures = (communiqueId, title) => {
             document.getElementById('view-sig-title').textContent = title;
             const container = document.getElementById('signatures-list-container');
             container.innerHTML = '';
-
             const signatures = currentAdminSignatures.filter(s => s.communiqueId === communiqueId);
             document.getElementById('view-sig-stats').textContent = `${signatures.length} firmas registradas`;
 
@@ -1880,34 +1989,71 @@ service cloud.firestore {
             window.openModal('modal-view-signatures');
         };
 
-        // --- Renderizado Alumnos ---
+        // --- DASHBOARD ESTUDIANTE Y FIRMAS ---
+        async function loadStudentData() {
+            if(!currentStudentId || !currentSchoolId) return;
+
+            try {
+                const [studentDoc, schoolDoc] = await Promise.all([ getDoc(doc(db, "students", currentStudentId)), getDoc(doc(db, "schools", currentSchoolId)) ]);
+
+                if(studentDoc.exists() && schoolDoc.exists()) {
+                    const student = studentDoc.data();
+                    document.getElementById('dash-std-name').textContent = student.name;
+                    document.getElementById('dash-std-school').textContent = schoolDoc.data().name;
+
+                    const infoMode = document.getElementById('dash-std-payment-info');
+                    if(student.paymentMode === 'monthly') { infoMode.textContent = `Modo: Mensualidad de ${formatCurrency(student.monthlyFee)} (Cobro días ${student.billingDay || 1})`; } 
+                    else { infoMode.textContent = `Modo: Curso Total`; }
+
+                    window.clearListeners();
+
+                    activeListeners.push(onSnapshot(query(collection(db, "payments"), where("studentId", "==", currentStudentId)), (snapshot) => {
+                        let totalPaid = 0; const paymentsList = [];
+                        snapshot.forEach(doc => { const p = doc.data(); totalPaid += p.amount; paymentsList.push(p); });
+
+                        const totalOwed = window.calculateOwed(student);
+                        const debt = totalOwed - totalPaid;
+
+                        document.getElementById('dash-std-total').textContent = formatCurrency(totalOwed);
+                        document.getElementById('dash-std-paid').textContent = formatCurrency(totalPaid);
+                        
+                        const debtEl = document.getElementById('dash-std-debt');
+                        if (debt <= 0) { debtEl.textContent = '¡Paz y Salvo!'; debtEl.className = 'text-2xl font-bold text-green-600'; } 
+                        else { debtEl.textContent = formatCurrency(debt); debtEl.className = 'text-2xl font-bold text-red-600'; }
+
+                        const tbody = document.getElementById('dash-std-payments'); tbody.innerHTML = '';
+                        paymentsList.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(p => {
+                            tbody.innerHTML += `<tr class="hover:bg-slate-50"><td class="p-4">${formatDate(p.date)}</td><td class="p-4">${p.note}</td><td class="p-4 text-right font-medium text-green-600">+${formatCurrency(p.amount)}</td></tr>`;
+                        });
+                    }));
+
+                    activeListeners.push(onSnapshot(query(collection(db, "communiques"), where("schoolId", "==", currentSchoolId)), (snapshot) => {
+                        currentCommuniques = snapshot.docs.map(d => ({ id: d.id, ...d.data() })); window.renderStudentCommuniques();
+                    }));
+
+                    activeListeners.push(onSnapshot(query(collection(db, "signatures"), where("studentId", "==", currentStudentId)), (snapshot) => {
+                        currentStudentSignatures = snapshot.docs.map(d => ({ id: d.id, ...d.data() })); window.renderStudentCommuniques();
+                    }));
+                }
+            } catch (error) { console.error(error); }
+        }
+
         window.renderStudentCommuniques = function() {
             const container = document.getElementById('dash-std-communiques');
             container.innerHTML = '';
-            
-            if(currentCommuniques.length === 0) {
-                container.innerHTML = `<div class="p-8 text-center text-slate-500">No hay comunicados publicados.</div>`;
-                return;
-            }
+            if(currentCommuniques.length === 0) { container.innerHTML = `<div class="p-8 text-center text-slate-500">No hay comunicados publicados.</div>`; return; }
 
             const sorted = [...currentCommuniques].sort((a, b) => new Date(b.date) - new Date(a.date));
 
             sorted.forEach(com => {
                 const hasSigned = currentStudentSignatures.some(s => s.communiqueId === com.id);
-                
                 let actionHtml = '';
                 if (com.requiresSignature) {
-                    if (hasSigned) {
-                        actionHtml = `<span class="bg-green-100 text-green-700 font-bold px-3 py-1.5 rounded-lg text-sm flex items-center gap-1"><i class="fa-solid fa-check"></i> Autorizado</span>`;
-                    } else {
-                        actionHtml = `<button onclick="window.prepareSignModal('${com.id}', '${com.title.replace(/'/g, "\\'")}')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg text-sm shadow-sm transition-colors flex items-center gap-2 animate-pulse"><i class="fa-solid fa-pen-nib"></i> Firmar Ahora</button>`;
-                    }
+                    if (hasSigned) { actionHtml = `<span class="bg-green-100 text-green-700 font-bold px-3 py-1.5 rounded-lg text-sm flex items-center gap-1"><i class="fa-solid fa-check"></i> Autorizado</span>`; } 
+                    else { actionHtml = `<button onclick="window.prepareSignModal('${com.id}', '${com.title.replace(/'/g, "\\'")}')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg text-sm shadow-sm transition-colors flex items-center gap-2 animate-pulse"><i class="fa-solid fa-pen-nib"></i> Firmar Ahora</button>`; }
                 }
 
-                let documentHtml = '';
-                if (com.documentUrl) {
-                    documentHtml = `<div class="mt-3"><a href="${com.documentUrl}" target="_blank" class="inline-flex items-center gap-2 text-sm text-blue-700 hover:text-blue-900 font-medium bg-blue-50 px-3 py-2 rounded-lg border border-blue-200 transition-colors"><i class="fa-solid fa-file-pdf"></i> Ver Documento Adjunto</a></div>`;
-                }
+                let documentHtml = com.documentUrl ? `<div class="mt-3"><a href="${com.documentUrl}" target="_blank" class="inline-flex items-center gap-2 text-sm text-blue-700 hover:text-blue-900 font-medium bg-blue-50 px-3 py-2 rounded-lg border border-blue-200 transition-colors"><i class="fa-solid fa-file-pdf"></i> Ver Documento Adjunto</a></div>` : '';
 
                 container.innerHTML += `
                     <div class="p-5 hover:bg-slate-50 transition-colors">
@@ -1918,118 +2064,62 @@ service cloud.firestore {
                                 <p class="text-slate-600 text-sm whitespace-pre-wrap">${com.content}</p>
                                 ${documentHtml}
                             </div>
-                            <div class="shrink-0 flex items-center justify-end">
-                                ${actionHtml}
-                            </div>
+                            <div class="shrink-0 flex items-center justify-end">${actionHtml}</div>
                         </div>
                     </div>
                 `;
             });
         };
 
-        // --- Lógica del Canvas (Firma Digital) ---
+        // Lógica de Canvas para la Firma Digital
         let sigCanvas, sigCtx, isDrawing = false;
-
         window.prepareSignModal = (communiqueId, title) => {
             document.getElementById('sign-communique-id').value = communiqueId;
             document.getElementById('sign-communique-title').textContent = title;
             window.openModal('modal-sign-communique');
-            
-            setTimeout(() => {
-                window.initSignaturePad();
-            }, 100);
+            setTimeout(() => { window.initSignaturePad(); }, 100);
         };
 
         window.initSignaturePad = () => {
             sigCanvas = document.getElementById('signature-pad');
-            sigCanvas.width = sigCanvas.offsetWidth;
-            sigCanvas.height = sigCanvas.offsetHeight;
-            
-            sigCtx = sigCanvas.getContext('2d');
-            sigCtx.strokeStyle = '#0f172a'; 
-            sigCtx.lineWidth = 3;
-            sigCtx.lineCap = 'round';
-            sigCtx.lineJoin = 'round';
-
-            sigCtx.fillStyle = '#ffffff';
-            sigCtx.fillRect(0, 0, sigCanvas.width, sigCanvas.height);
-
-            const getPos = (e) => {
-                const rect = sigCanvas.getBoundingClientRect();
-                let clientX = e.clientX;
-                let clientY = e.clientY;
-                if (e.touches && e.touches.length > 0) {
-                    clientX = e.touches[0].clientX;
-                    clientY = e.touches[0].clientY;
-                }
-                return {
-                    x: clientX - rect.left,
-                    y: clientY - rect.top
-                };
-            };
-
-            const startDraw = (e) => {
-                e.preventDefault(); 
-                isDrawing = true;
-                const pos = getPos(e);
-                sigCtx.beginPath();
-                sigCtx.moveTo(pos.x, pos.y);
-            };
-
-            const draw = (e) => {
-                if (!isDrawing) return;
-                e.preventDefault();
-                const pos = getPos(e);
-                sigCtx.lineTo(pos.x, pos.y);
-                sigCtx.stroke();
-            };
-
-            const stopDraw = (e) => {
-                if (!isDrawing) return;
-                e.preventDefault();
-                isDrawing = false;
-                sigCtx.closePath();
-            };
-
-            const newCanvas = sigCanvas.cloneNode(true);
-            sigCanvas.parentNode.replaceChild(newCanvas, sigCanvas);
-            sigCanvas = newCanvas;
+            sigCanvas.width = sigCanvas.offsetWidth; sigCanvas.height = sigCanvas.offsetHeight;
             sigCtx = sigCanvas.getContext('2d');
             sigCtx.strokeStyle = '#0f172a'; sigCtx.lineWidth = 3; sigCtx.lineCap = 'round'; sigCtx.lineJoin = 'round';
             sigCtx.fillStyle = '#ffffff'; sigCtx.fillRect(0, 0, sigCanvas.width, sigCanvas.height);
 
-            sigCanvas.addEventListener('mousedown', startDraw);
-            sigCanvas.addEventListener('mousemove', draw);
-            sigCanvas.addEventListener('mouseup', stopDraw);
-            sigCanvas.addEventListener('mouseout', stopDraw);
+            const getPos = (e) => {
+                const rect = sigCanvas.getBoundingClientRect();
+                let x = e.clientX, y = e.clientY;
+                if (e.touches && e.touches.length > 0) { x = e.touches[0].clientX; y = e.touches[0].clientY; }
+                return { x: x - rect.left, y: y - rect.top };
+            };
 
-            sigCanvas.addEventListener('touchstart', startDraw, {passive: false});
-            sigCanvas.addEventListener('touchmove', draw, {passive: false});
-            sigCanvas.addEventListener('touchend', stopDraw, {passive: false});
-            sigCanvas.addEventListener('touchcancel', stopDraw, {passive: false});
+            const startDraw = (e) => { e.preventDefault(); isDrawing = true; const pos = getPos(e); sigCtx.beginPath(); sigCtx.moveTo(pos.x, pos.y); };
+            const draw = (e) => { if (!isDrawing) return; e.preventDefault(); const pos = getPos(e); sigCtx.lineTo(pos.x, pos.y); sigCtx.stroke(); };
+            const stopDraw = (e) => { if (!isDrawing) return; e.preventDefault(); isDrawing = false; sigCtx.closePath(); };
+
+            const newCanvas = sigCanvas.cloneNode(true);
+            sigCanvas.parentNode.replaceChild(newCanvas, sigCanvas);
+            sigCanvas = newCanvas; sigCtx = sigCanvas.getContext('2d');
+            sigCtx.strokeStyle = '#0f172a'; sigCtx.lineWidth = 3; sigCtx.lineCap = 'round'; sigCtx.lineJoin = 'round';
+            sigCtx.fillStyle = '#ffffff'; sigCtx.fillRect(0, 0, sigCanvas.width, sigCanvas.height);
+
+            sigCanvas.addEventListener('mousedown', startDraw); sigCanvas.addEventListener('mousemove', draw);
+            sigCanvas.addEventListener('mouseup', stopDraw); sigCanvas.addEventListener('mouseout', stopDraw);
+            sigCanvas.addEventListener('touchstart', startDraw, {passive: false}); sigCanvas.addEventListener('touchmove', draw, {passive: false});
+            sigCanvas.addEventListener('touchend', stopDraw, {passive: false}); sigCanvas.addEventListener('touchcancel', stopDraw, {passive: false});
         };
 
-        window.clearSignature = () => {
-            if(sigCtx && sigCanvas) {
-                sigCtx.fillStyle = '#ffffff';
-                sigCtx.fillRect(0, 0, sigCanvas.width, sigCanvas.height);
-            }
-        };
+        window.clearSignature = () => { if(sigCtx && sigCanvas) { sigCtx.fillStyle = '#ffffff'; sigCtx.fillRect(0, 0, sigCanvas.width, sigCanvas.height); } };
 
         window.handleSaveSignature = async (e) => {
             e.preventDefault();
-            
             const blankCanvas = document.createElement('canvas');
-            blankCanvas.width = sigCanvas.width;
-            blankCanvas.height = sigCanvas.height;
+            blankCanvas.width = sigCanvas.width; blankCanvas.height = sigCanvas.height;
             const blankCtx = blankCanvas.getContext('2d');
-            blankCtx.fillStyle = '#ffffff';
-            blankCtx.fillRect(0, 0, blankCanvas.width, blankCanvas.height);
+            blankCtx.fillStyle = '#ffffff'; blankCtx.fillRect(0, 0, blankCanvas.width, blankCanvas.height);
             
-            if (sigCanvas.toDataURL() === blankCanvas.toDataURL()) {
-                showToast("Por favor, dibuja tu firma antes de enviar.", "error");
-                return;
-            }
+            if (sigCanvas.toDataURL() === blankCanvas.toDataURL()) { showToast("Por favor, dibuja tu firma antes de enviar.", "error"); return; }
 
             setLoading('btn-save-signature', true);
             const communiqueId = document.getElementById('sign-communique-id').value;
@@ -2037,25 +2127,15 @@ service cloud.firestore {
             
             try {
                 const studentName = document.getElementById('dash-std-name').textContent;
-
                 await addDoc(collection(db, "signatures"), {
-                    schoolId: currentSchoolId,
-                    studentId: currentStudentId,
-                    studentName: studentName,
-                    communiqueId: communiqueId,
-                    signatureData: signatureData,
-                    timestamp: serverTimestamp()
+                    schoolId: currentSchoolId, studentId: currentStudentId, studentName: studentName,
+                    communiqueId: communiqueId, signatureData: signatureData, timestamp: serverTimestamp()
                 });
-
                 showToast("Autorización firmada correctamente.");
                 window.closeModal('modal-sign-communique');
-            } catch (error) {
-                showToast("Error al guardar la firma.", "error");
-            } finally {
-                setLoading('btn-save-signature', false);
-            }
+            } catch (error) { showToast("Error al guardar la firma.", "error"); } 
+            finally { setLoading('btn-save-signature', false); }
         };
-
     </script>
 </body>
 </html>
